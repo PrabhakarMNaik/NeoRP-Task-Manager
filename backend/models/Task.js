@@ -13,7 +13,7 @@ class Task {
         ) as linked_tasks
       FROM tasks t
       LEFT JOIN task_links tl ON t.id = tl.task_id
-      GROUP BY t.id, t.title, t.description, t.assignee, t.priority, t.due_date, t.status, t.files, t.created_at, t.updated_at
+      GROUP BY t.id, t.title, t.description, t.assignee, t.priority, t.due_date, t.status, t.files, t.allowed_apps, t.time_spent, t.created_at, t.updated_at
       ORDER BY t.created_at DESC
     `;
     
@@ -28,6 +28,8 @@ class Task {
         dueDate: row.due_date,
         status: row.status,
         files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
+        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
+        timeSpent: parseInt(row.time_spent) || 0,
         linkedTasks: row.linked_tasks || [],
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -50,7 +52,7 @@ class Task {
       FROM tasks t
       LEFT JOIN task_links tl ON t.id = tl.task_id
       WHERE t.id = $1
-      GROUP BY t.id, t.title, t.description, t.assignee, t.priority, t.due_date, t.status, t.files, t.created_at, t.updated_at
+      GROUP BY t.id, t.title, t.description, t.assignee, t.priority, t.due_date, t.status, t.files, t.allowed_apps, t.time_spent, t.created_at, t.updated_at
     `;
     
     try {
@@ -67,6 +69,8 @@ class Task {
         dueDate: row.due_date,
         status: row.status,
         files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
+        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
+        timeSpent: parseInt(row.time_spent) || 0,
         linkedTasks: row.linked_tasks || [],
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -108,8 +112,8 @@ class Task {
     const query = `
       INSERT INTO tasks (
         id, title, description, assignee, priority, due_date, 
-        status, files, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+        status, files, allowed_apps, time_spent, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
       RETURNING *
     `;
     
@@ -122,6 +126,8 @@ class Task {
       taskData.dueDate || null,
       taskData.status || 'backlog',
       JSON.stringify(taskData.files || []),
+      JSON.stringify(taskData.allowedApps || []),
+      parseInt(taskData.timeSpent) || 0,
       new Date().toISOString()
     ];
     
@@ -137,6 +143,8 @@ class Task {
         dueDate: row.due_date,
         status: row.status,
         files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
+        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
+        timeSpent: parseInt(row.time_spent) || 0,
         linkedTasks: [],
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -152,8 +160,9 @@ class Task {
     const query = `
       UPDATE tasks 
       SET title = $1, description = $2, assignee = $3, priority = $4, 
-          due_date = $5, status = $6, files = $7, updated_at = $8
-      WHERE id = $9
+          due_date = $5, status = $6, files = $7, allowed_apps = $8, 
+          time_spent = $9, updated_at = $10
+      WHERE id = $11
       RETURNING *
     `;
     
@@ -165,6 +174,8 @@ class Task {
       taskData.dueDate || null,
       taskData.status,
       JSON.stringify(taskData.files || []),
+      JSON.stringify(taskData.allowedApps || []),
+      parseInt(taskData.timeSpent) || 0,
       new Date().toISOString(),
       id
     ];
@@ -183,6 +194,8 @@ class Task {
         dueDate: row.due_date,
         status: row.status,
         files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
+        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
+        timeSpent: parseInt(row.time_spent) || 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at
       };
@@ -280,6 +293,30 @@ class Task {
       return { success: true, message: 'Tasks unlinked successfully' };
     } catch (error) {
       console.error('Error in unlinkTasks:', error);
+      throw error;
+    }
+  }
+
+  // Update time spent on a task
+  static async updateTimeSpent(id, timeSpent) {
+    const query = `
+      UPDATE tasks 
+      SET time_spent = $1, updated_at = $2
+      WHERE id = $3
+      RETURNING *
+    `;
+    
+    try {
+      const result = await pool.query(query, [
+        parseInt(timeSpent),
+        new Date().toISOString(),
+        id
+      ]);
+      
+      if (result.rows.length === 0) return null;
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error in updateTimeSpent:', error);
       throw error;
     }
   }

@@ -1,5 +1,5 @@
 -- NeoRP Project Planning Database Schema
--- Fixed version for PostgreSQL compatibility
+-- Updated version for PostgreSQL compatibility with new features
 -- Run this after creating database and user
 
 -- Drop existing tables if they exist (for clean reinstall)
@@ -10,7 +10,7 @@ DROP TABLE IF EXISTS tasks CASCADE;
 DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 DROP FUNCTION IF EXISTS update_updated_at_column();
 
--- Create tasks table
+-- Create tasks table with new columns
 CREATE TABLE tasks (
     id VARCHAR(20) PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
@@ -20,6 +20,8 @@ CREATE TABLE tasks (
     due_date DATE,
     status VARCHAR(20) DEFAULT 'backlog',
     files TEXT DEFAULT '[]',
+    allowed_apps TEXT DEFAULT '[]',
+    time_spent INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -59,6 +61,7 @@ CREATE INDEX idx_tasks_assignee ON tasks(assignee);
 CREATE INDEX idx_tasks_priority ON tasks(priority);
 CREATE INDEX idx_tasks_created_at ON tasks(created_at);
 CREATE INDEX idx_tasks_updated_at ON tasks(updated_at);
+CREATE INDEX idx_tasks_time_spent ON tasks(time_spent);
 CREATE INDEX idx_task_links_task_id ON task_links(task_id);
 CREATE INDEX idx_task_links_linked_task_id ON task_links(linked_task_id);
 
@@ -77,8 +80,8 @@ CREATE TRIGGER update_tasks_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Insert sample data with proper escaping
-INSERT INTO tasks (id, title, description, assignee, priority, due_date, status) VALUES
+-- Insert sample data with proper escaping and new fields
+INSERT INTO tasks (id, title, description, assignee, priority, due_date, status, allowed_apps, time_spent) VALUES
 ('NRP-001', 'User Authentication System', 
 '# User Authentication
 
@@ -92,10 +95,16 @@ Implement secure user authentication with JWT tokens.
 ## Implementation Notes
 - Use bcrypt for password hashing
 - JWT tokens for stateless authentication
-- Implement password reset functionality', 
-'John Doe', 'high', '2025-06-15', 'backlog');
+- Implement password reset functionality
 
-INSERT INTO tasks (id, title, description, assignee, priority, due_date, status) VALUES
+## URLs and Resources
+[JWT Documentation](https://jwt.io/)
+[bcrypt NPM Package](https://www.npmjs.com/package/bcrypt)
+
+![Authentication Flow](https://via.placeholder.com/600x300?text=Authentication+Flow+Diagram)', 
+'John Doe', 'high', '2025-06-15', 'backlog', '["VSCode", "Terminal", "Firefox", "Postman"]', 3600);
+
+INSERT INTO tasks (id, title, description, assignee, priority, due_date, status, allowed_apps, time_spent) VALUES
 ('NRP-002', 'Database Schema Design',
 '# Database Design
 
@@ -118,10 +127,14 @@ CREATE TABLE users (
 ## Considerations
 - Indexing strategy
 - Foreign key constraints
-- Data migration planning', 
-'Jane Smith', 'medium', '2025-06-20', 'planned');
+- Data migration planning
 
-INSERT INTO tasks (id, title, description, assignee, priority, due_date, status) VALUES
+## Resources
+[PostgreSQL Documentation](https://www.postgresql.org/docs/)
+[Database Design Best Practices](https://example.com/db-design)', 
+'Jane Smith', 'medium', '2025-06-20', 'planned', '["VSCode", "Terminal", "DBeaver"]', 2400);
+
+INSERT INTO tasks (id, title, description, assignee, priority, due_date, status, allowed_apps, time_spent) VALUES
 ('NRP-003', 'Frontend UI Components',
 '# Frontend Components
 
@@ -142,10 +155,15 @@ Build reusable React components for the project management interface.
 ## Tech Stack
 - React 18+
 - Tailwind CSS
-- Lucide React Icons', 
-'Bob Wilson', 'medium', '2025-06-25', 'backlog');
+- Lucide React Icons
 
-INSERT INTO tasks (id, title, description, assignee, priority, due_date, status) VALUES
+## Design References
+![UI Mockup](https://via.placeholder.com/800x600?text=UI+Component+Mockups)
+
+Check out [Tailwind UI](https://tailwindui.com/) for inspiration.', 
+'Bob Wilson', 'medium', '2025-06-25', 'backlog', '["VSCode", "Firefox", "Figma"]', 1800);
+
+INSERT INTO tasks (id, title, description, assignee, priority, due_date, status, allowed_apps, time_spent) VALUES
 ('NRP-004', 'API Development',
 '# REST API Development
 
@@ -162,8 +180,14 @@ Develop comprehensive REST API endpoints for task management.
 - Input validation
 - Error handling
 - Database transactions
-- CORS configuration', 
-'Alice Johnson', 'high', '2025-06-18', 'in-progress');
+- CORS configuration
+
+## Testing
+Use [Postman](https://www.postman.com/) for API testing.
+
+## Documentation
+Generate docs with [Swagger](https://swagger.io/)', 
+'Alice Johnson', 'high', '2025-06-18', 'in-progress', '["VSCode", "Terminal", "Postman", "Browser"]', 5400);
 
 -- Create sample task links (bidirectional)
 INSERT INTO task_links (task_id, linked_task_id) VALUES
@@ -193,6 +217,8 @@ SELECT
     assignee, 
     priority, 
     status,
+    time_spent,
+    allowed_apps,
     created_at
 FROM tasks 
 ORDER BY id;
