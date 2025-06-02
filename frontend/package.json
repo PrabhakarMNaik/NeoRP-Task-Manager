@@ -1,7 +1,8 @@
 {
   "name": "neorp-frontend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
+  "description": "NeoRP Enhanced Project Planning Frontend with Advanced Editor",
   "dependencies": {
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.4.0",
@@ -16,21 +17,33 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js",
+    "clean": "rm -rf build node_modules && npm install",
+    "dev": "npm start",
+    "preview": "npm run build && npx serve -s build -l 3000"
   },
   "eslintConfig": {
     "extends": [
       "react-app"
     ],
     "env": {
-      "jest": true
+      "jest": true,
+      "browser": true,
+      "es6": true
+    },
+    "rules": {
+      "no-unused-vars": "warn",
+      "no-console": "off",
+      "react-hooks/exhaustive-deps": "warn"
     }
   },
   "browserslist": {
     "production": [
       ">0.2%",
       "not dead",
-      "not op_mini all"
+      "not op_mini all",
+      "not IE 11"
     ],
     "development": [
       "last 1 chrome version",
@@ -38,5 +51,26 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:3001"
+  "proxy": "http://localhost:3001",
+  "keywords": [
+    "react",
+    "project-management",
+    "kanban",
+    "notion-like-editor",
+    "task-tracking",
+    "productivity"
+  ],
+  "author": "NeoRP Team",
+  "license": "MIT",
+  "homepage": ".",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.4",
+    "tailwindcss": "^3.4.17"
+  }
 }
