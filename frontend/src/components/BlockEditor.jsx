@@ -1,346 +1,30 @@
+// Version 8 - Rich text editor with toolbar and proper text visibility
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent } from '@tiptap/react';
-import { Node, mergeAttributes } from '@tiptap/core';
-import Document from '@tiptap/extension-document';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from 'prosemirror-state';
 import { 
-  Type, Bold, Italic, Code, Link, ListOrdered, List, Quote, 
-  Heading1, Heading2, Heading3, Image as ImageIcon, Minus, 
-  CheckSquare, File, Trash2, Plus, GripVertical, ChevronRight,
-  Clock, User, Calendar, Hash
+  Bold, Italic, Code, List, ListOrdered, Quote, 
+  Heading1, Heading2, Heading3, Minus, 
+  CheckSquare, Image as ImageIcon,
+  Underline, Strikethrough
 } from 'lucide-react';
 
-// Block metadata extension to track last edited time
-const BlockMetadata = Extension.create({
-  name: 'blockMetadata',
-
-  addGlobalAttributes() {
-    return [
-      {
-        types: ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'codeBlock', 'taskList'],
-        attributes: {
-          lastEdited: {
-            default: new Date().toISOString(),
-            parseHTML: element => element.getAttribute('data-last-edited'),
-            renderHTML: attributes => {
-              return {
-                'data-last-edited': attributes.lastEdited || new Date().toISOString(),
-              };
-            },
-          },
-          blockId: {
-            default: () => `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            parseHTML: element => element.getAttribute('data-block-id'),
-            renderHTML: attributes => {
-              return {
-                'data-block-id': attributes.blockId,
-              };
-            },
-          },
-          author: {
-            default: null,
-            parseHTML: element => element.getAttribute('data-author'),
-            renderHTML: attributes => {
-              if (!attributes.author) return {};
-              return {
-                'data-author': attributes.author,
-              };
-            },
-          },
-        },
-      },
-    ];
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('updateBlockMetadata'),
-        appendTransaction: (transactions, oldState, newState) => {
-          const docChanged = transactions.some(tr => tr.docChanged);
-          if (!docChanged) return null;
-
-          const tr = newState.tr;
-          let modified = false;
-
-          transactions.forEach(transaction => {
-            if (!transaction.docChanged) return;
-
-            transaction.steps.forEach(step => {
-              step.getMap().forEach((oldStart, oldEnd, newStart, newEnd) => {
-                const $pos = newState.doc.resolve(newStart);
-                const node = $pos.parent;
-                
-                if (node && node.type.spec.group?.includes('block')) {
-                  tr.setNodeMarkup($pos.before($pos.depth), null, {
-                    ...node.attrs,
-                    lastEdited: new Date().toISOString(),
-                  });
-                  modified = true;
-                }
-              });
-            });
-          });
-
-          return modified ? tr : null;
-        },
-      }),
-    ];
-  },
-});
-
-// Custom Block Node for wrapping content
-const BlockNode = Node.create({
-  name: 'block',
-  group: 'block',
-  content: 'block+',
-  draggable: true,
-  
-  parseHTML() {
-    return [{ tag: 'div[data-block]' }];
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, { 'data-block': true }), 0];
-  },
-
-  addNodeView() {
-    return ReactNodeViewRenderer(BlockWrapper);
-  },
-});
-
-// Block Wrapper Component
-const BlockWrapper = ({ node, getPos, editor, deleteNode }) => {
-  const [showMenu, setShowMenu] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const menuRef = useRef(null);
-
-  const handleDelete = () => {
-    deleteNode();
-  };
-
-  const handleAddBlock = () => {
-    const pos = getPos() + node.nodeSize;
-    editor.chain()
-      .focus()
-      .insertContentAt(pos, { type: 'paragraph' })
-      .focus(pos + 1)
-      .run();
-  };
-
-  const handleDragStart = (e) => {
-    setIsDragging(true);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', '');
-    
-    const pos = getPos();
-    const $pos = editor.state.doc.resolve(pos);
-    const selection = editor.state.tr.setSelection(
-      editor.state.selection.constructor.create(editor.state.doc, $pos.pos, $pos.pos + node.nodeSize)
-    );
-    editor.view.dispatch(selection);
-  };
-
-  const handleDragEnd = () => {
-    setIsDragging(false);
-  };
-
-  return (
-    <div 
-      className={`block-wrapper group relative ${isDragging ? 'opacity-50' : ''}`}
-      data-block-id={node.attrs?.blockId}
-    >
-      {/* Drag Handle */}
-      <div
-        className="drag-handle absolute -left-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-move p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-        draggable
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        contentEditable={false}
-      >
-        <GripVertical size={16} className="text-gray-400" />
-      </div>
-
-      {/* Add Button */}
-      <button
-        className="add-button absolute -left-16 top-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-        onClick={handleAddBlock}
-        contentEditable={false}
-      >
-        <Plus size={16} className="text-gray-400" />
-      </button>
-
-      {/* Content */}
-      <div className="block-content">
-        {/* NodeViewContent renders the actual content */}
-      </div>
-    </div>
-  );
-};
-
-// Slash Command Menu
-const SlashCommandMenu = ({ editor, items, command }) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex((prevIndex) => 
-          prevIndex > 0 ? prevIndex - 1 : items.length - 1
-        );
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex((prevIndex) => 
-          prevIndex < items.length - 1 ? prevIndex + 1 : 0
-        );
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const item = items[selectedIndex];
-        if (item) {
-          command(item);
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [items, selectedIndex, command]);
-
-  return (
-    <div className="slash-menu absolute z-50 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 w-64 max-h-80 overflow-y-auto">
-      {items.map((item, index) => (
-        <button
-          key={index}
-          onClick={() => command(item)}
-          className={`w-full px-4 py-2 text-left flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-            index === selectedIndex ? 'bg-gray-100 dark:bg-gray-700' : ''
-          }`}
-        >
-          <span className="text-gray-400">{item.icon}</span>
-          <div>
-            <div className="font-medium text-sm">{item.title}</div>
-            <div className="text-xs text-gray-500">{item.description}</div>
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-};
-
-// Slash Commands Extension
-const SlashCommands = Extension.create({
-  name: 'slashCommands',
-
-  addOptions() {
-    return {
-      suggestion: {
-        char: '/',
-        startOfLine: true,
-        command: ({ editor, range, props }) => {
-          props.command({ editor, range });
-        },
-      },
-    };
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      // This would integrate with @tiptap/suggestion
-      // For simplicity, we'll handle it in the main component
-    ];
-  },
-});
-
-// Block Editor Component
-const BlockEditor = ({ value, onChange, isDarkMode, selectedTask, updateTask }) => {
-  const [showSlashMenu, setShowSlashMenu] = useState(false);
-  const [slashMenuPosition, setSlashMenuPosition] = useState({ x: 0, y: 0 });
-  const [slashMenuSearch, setSlashMenuSearch] = useState('');
+const BlockEditor = ({ value, onChange, isDarkMode }) => {
+  const [showToolbar, setShowToolbar] = useState(false);
   const editorRef = useRef(null);
-
-  const slashCommands = [
-    { 
-      title: 'Heading 1', 
-      description: 'Big section heading', 
-      icon: <Heading1 size={18} />,
-      command: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run()
-    },
-    { 
-      title: 'Heading 2', 
-      description: 'Medium section heading', 
-      icon: <Heading2 size={18} />,
-      command: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run()
-    },
-    { 
-      title: 'Heading 3', 
-      description: 'Small section heading', 
-      icon: <Heading3 size={18} />,
-      command: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run()
-    },
-    { 
-      title: 'Text', 
-      description: 'Plain text paragraph', 
-      icon: <Type size={18} />,
-      command: (editor) => editor.chain().focus().setParagraph().run()
-    },
-    { 
-      title: 'Bullet List', 
-      description: 'Create a simple list', 
-      icon: <List size={18} />,
-      command: (editor) => editor.chain().focus().toggleBulletList().run()
-    },
-    { 
-      title: 'Numbered List', 
-      description: 'Create a numbered list', 
-      icon: <ListOrdered size={18} />,
-      command: (editor) => editor.chain().focus().toggleOrderedList().run()
-    },
-    { 
-      title: 'Task List', 
-      description: 'Track tasks with checkboxes', 
-      icon: <CheckSquare size={18} />,
-      command: (editor) => editor.chain().focus().toggleTaskList().run()
-    },
-    { 
-      title: 'Quote', 
-      description: 'Capture a quote', 
-      icon: <Quote size={18} />,
-      command: (editor) => editor.chain().focus().toggleBlockquote().run()
-    },
-    { 
-      title: 'Code Block', 
-      description: 'Display code with syntax highlighting', 
-      icon: <Code size={18} />,
-      command: (editor) => editor.chain().focus().toggleCodeBlock().run()
-    },
-    { 
-      title: 'Divider', 
-      description: 'Visually divide sections', 
-      icon: <Minus size={18} />,
-      command: (editor) => editor.chain().focus().setHorizontalRule().run()
-    },
-  ];
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        document: false,
-        dropcursor: {
-          color: '#3b82f6',
-          width: 3,
+        heading: {
+          levels: [1, 2, 3],
         },
       }),
-      Document.extend({
-        content: 'block+',
-      }),
-      BlockMetadata,
       Image.configure({
         inline: true,
         allowBase64: true,
@@ -354,190 +38,353 @@ const BlockEditor = ({ value, onChange, isDarkMode, selectedTask, updateTask }) 
           if (node.type.name === 'heading') {
             return `Heading ${node.attrs.level}`;
           }
-          return "Type '/' for commands...";
+          return "Start typing... Use '/' for quick commands";
         },
         showOnlyWhenEditable: true,
         includeChildren: true,
       }),
-      SlashCommands,
     ],
     content: value || '<p></p>',
     editorProps: {
       attributes: {
-        class: `prose prose-lg max-w-none focus:outline-none min-h-[400px] px-8 py-6 ${
-          isDarkMode ? 'prose-invert' : ''
+        class: `prose prose-lg max-w-none focus:outline-none min-h-[400px] px-6 py-4 ${
+          isDarkMode 
+            ? 'prose-invert text-white caret-white' 
+            : 'prose-gray text-gray-900 caret-gray-900'
         }`,
+        style: isDarkMode 
+          ? 'color: #fff; caret-color: #fff;' 
+          : 'color: #1f2937; caret-color: #1f2937;'
       },
       handleKeyDown: (view, event) => {
-        // Handle slash command
+        // Show toolbar on focus
+        if (!showToolbar) {
+          setShowToolbar(true);
+        }
+
+        // Handle slash commands
         if (event.key === '/') {
           const { state } = view;
           const { selection } = state;
           const { $from } = selection;
           
-          // Check if at start of line or after space
           const textBefore = $from.parent.textContent.slice(0, $from.parentOffset);
           if (textBefore === '' || textBefore.endsWith(' ')) {
-            setTimeout(() => {
-              const coords = view.coordsAtPos(selection.from);
-              setSlashMenuPosition({ 
-                x: coords.left, 
-                y: coords.bottom + 5 
-              });
-              setShowSlashMenu(true);
-              setSlashMenuSearch('');
-            }, 0);
+            // Could implement slash command menu here
+            return false;
           }
-        } else if (event.key === 'Escape' && showSlashMenu) {
-          setShowSlashMenu(false);
-          return true;
         }
       },
     },
     onUpdate: ({ editor }) => {
-      const json = editor.getJSON();
-      onChange(json);
-      
-      // Update metadata for reporting
-      const blocks = [];
-      const extractBlocks = (content) => {
-        if (Array.isArray(content)) {
-          content.forEach(item => {
-            if (item.type && item.attrs) {
-              blocks.push({
-                type: item.type,
-                ...item.attrs,
-                content: item.content,
-              });
-            }
-            if (item.content) {
-              extractBlocks(item.content);
-            }
-          });
+      onChange(editor.getHTML());
+    },
+    onFocus: () => {
+      setShowToolbar(true);
+    },
+    onBlur: () => {
+      // Keep toolbar visible for a short time
+      setTimeout(() => {
+        if (editorRef.current && !editorRef.current.contains(document.activeElement)) {
+          setShowToolbar(false);
         }
-      };
-      
-      extractBlocks(json.content);
-      
-      // Store metadata for reporting
-      if (selectedTask && updateTask) {
-        updateTask({
-          ...selectedTask,
-          blockMetadata: blocks,
-        });
-      }
+      }, 200);
     },
   });
 
-  const executeSlashCommand = (item) => {
-    if (editor) {
-      // Remove the slash
-      editor.chain().focus().deleteRange({
-        from: editor.state.selection.from - 1,
-        to: editor.state.selection.from,
-      }).run();
-      
-      // Execute command
-      item.command(editor);
-      setShowSlashMenu(false);
+  const addImage = useCallback(() => {
+    const url = window.prompt('Enter image URL:');
+    if (url && editor) {
+      editor.chain().focus().setImage({ src: url }).run();
     }
-  };
-
-  // Filter slash commands based on search
-  const filteredCommands = slashCommands.filter(cmd =>
-    cmd.title.toLowerCase().includes(slashMenuSearch.toLowerCase()) ||
-    cmd.description.toLowerCase().includes(slashMenuSearch.toLowerCase())
-  );
-
-  // Handle input changes to update slash search
-  useEffect(() => {
-    if (!editor || !showSlashMenu) return;
-
-    const handleTransaction = () => {
-      const { state } = editor;
-      const { selection } = state;
-      const { $from } = selection;
-      
-      // Get text after slash
-      const text = $from.parent.textContent.slice(0, $from.parentOffset);
-      const slashIndex = text.lastIndexOf('/');
-      
-      if (slashIndex !== -1) {
-        const searchText = text.slice(slashIndex + 1);
-        setSlashMenuSearch(searchText);
-        
-        // Hide menu if no slash found
-        if (searchText.includes(' ')) {
-          setShowSlashMenu(false);
-        }
-      } else {
-        setShowSlashMenu(false);
-      }
-    };
-
-    editor.on('transaction', handleTransaction);
-    return () => editor.off('transaction', handleTransaction);
-  }, [editor, showSlashMenu]);
-
-  // Handle paste for images
-  useEffect(() => {
-    const handlePaste = async (e) => {
-      if (!editor) return;
-      
-      const items = e.clipboardData?.items;
-      if (!items) return;
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.indexOf('image') !== -1) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          
-          // Convert to base64
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            editor.chain().focus().setImage({ 
-              src: event.target.result 
-            }).run();
-          };
-          reader.readAsDataURL(file);
-          break;
-        }
-      }
-    };
-
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
   }, [editor]);
 
   if (!editor) {
-    return null;
+    return (
+      <div className={`animate-pulse ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+        Loading editor...
+      </div>
+    );
   }
+
+  const ToolbarButton = ({ onClick, isActive, children, title }) => (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-2 rounded-lg transition-all duration-200 ${
+        isActive 
+          ? (isDarkMode 
+              ? 'bg-blue-600 text-white shadow-lg' 
+              : 'bg-blue-500 text-white shadow-lg'
+            )
+          : (isDarkMode 
+              ? 'text-gray-300 hover:text-white hover:bg-gray-700' 
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            )
+      }`}
+    >
+      {children}
+    </button>
+  );
 
   return (
     <div 
       ref={editorRef}
       className={`block-editor relative ${isDarkMode ? 'dark' : ''}`}
     >
-      <EditorContent editor={editor} />
-      
-      {/* Slash Command Menu */}
-      {showSlashMenu && (
-        <div
-          style={{
-            position: 'fixed',
-            left: slashMenuPosition.x,
-            top: slashMenuPosition.y,
-            zIndex: 1000,
-          }}
-        >
-          <SlashCommandMenu
-            editor={editor}
-            items={filteredCommands}
-            command={executeSlashCommand}
-          />
+      {/* Floating Toolbar */}
+      {showToolbar && (
+        <div className={`sticky top-0 z-10 p-4 border-b backdrop-blur-sm transition-all duration-300 ${
+          isDarkMode 
+            ? 'bg-gray-800/90 border-gray-600/30' 
+            : 'bg-white/90 border-gray-200/30'
+        }`}>
+          <div className="flex flex-wrap items-center gap-1">
+            {/* Text Formatting */}
+            <div className="flex items-center space-x-1 mr-4">
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                isActive={editor.isActive('bold')}
+                title="Bold (Ctrl+B)"
+              >
+                <Bold size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                isActive={editor.isActive('italic')}
+                title="Italic (Ctrl+I)"
+              >
+                <Italic size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleStrike().run()}
+                isActive={editor.isActive('strike')}
+                title="Strikethrough"
+              >
+                <Strikethrough size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleCode().run()}
+                isActive={editor.isActive('code')}
+                title="Inline Code"
+              >
+                <Code size={16} />
+              </ToolbarButton>
+            </div>
+
+            {/* Headings */}
+            <div className="flex items-center space-x-1 mr-4">
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                isActive={editor.isActive('heading', { level: 1 })}
+                title="Heading 1"
+              >
+                <Heading1 size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                isActive={editor.isActive('heading', { level: 2 })}
+                title="Heading 2"
+              >
+                <Heading2 size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                isActive={editor.isActive('heading', { level: 3 })}
+                title="Heading 3"
+              >
+                <Heading3 size={16} />
+              </ToolbarButton>
+            </div>
+
+            {/* Lists */}
+            <div className="flex items-center space-x-1 mr-4">
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                isActive={editor.isActive('bulletList')}
+                title="Bullet List"
+              >
+                <List size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                isActive={editor.isActive('orderedList')}
+                title="Numbered List"
+              >
+                <ListOrdered size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleTaskList().run()}
+                isActive={editor.isActive('taskList')}
+                title="Task List"
+              >
+                <CheckSquare size={16} />
+              </ToolbarButton>
+            </div>
+
+            {/* Other Elements */}
+            <div className="flex items-center space-x-1">
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                isActive={editor.isActive('blockquote')}
+                title="Quote"
+              >
+                <Quote size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                isActive={editor.isActive('codeBlock')}
+                title="Code Block"
+              >
+                <Code size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().setHorizontalRule().run()}
+                title="Horizontal Rule"
+              >
+                <Minus size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={addImage}
+                title="Add Image"
+              >
+                <ImageIcon size={16} />
+              </ToolbarButton>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Editor Content */}
+      <div className={`editor-content ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+        <EditorContent 
+          editor={editor} 
+          style={{
+            color: isDarkMode ? '#ffffff' : '#1f2937',
+            caretColor: isDarkMode ? '#ffffff' : '#1f2937'
+          }}
+        />
+      </div>
+
+      {/* Quick Help */}
+      {!showToolbar && (
+        <div className={`absolute bottom-4 right-4 text-xs px-3 py-2 rounded-lg ${
+          isDarkMode 
+            ? 'bg-gray-700/80 text-gray-400' 
+            : 'bg-gray-100/80 text-gray-600'
+        }`}>
+          Click to start editing
+        </div>
+      )}
+
+      <style jsx>{`
+        .editor-content .ProseMirror {
+          outline: none;
+        }
+        
+        .dark-mode .ProseMirror {
+          color: #ffffff !important;
+          caret-color: #ffffff !important;
+        }
+        
+        .light-mode .ProseMirror {
+          color: #1f2937 !important;
+          caret-color: #1f2937 !important;
+        }
+        
+        .dark-mode .ProseMirror h1,
+        .dark-mode .ProseMirror h2,
+        .dark-mode .ProseMirror h3,
+        .dark-mode .ProseMirror h4,
+        .dark-mode .ProseMirror h5,
+        .dark-mode .ProseMirror h6 {
+          color: #ffffff !important;
+        }
+        
+        .light-mode .ProseMirror h1,
+        .light-mode .ProseMirror h2,
+        .light-mode .ProseMirror h3,
+        .light-mode .ProseMirror h4,
+        .light-mode .ProseMirror h5,
+        .light-mode .ProseMirror h6 {
+          color: #1f2937 !important;
+        }
+        
+        .dark-mode .ProseMirror p,
+        .dark-mode .ProseMirror li,
+        .dark-mode .ProseMirror blockquote {
+          color: #e5e7eb !important;
+        }
+        
+        .light-mode .ProseMirror p,
+        .light-mode .ProseMirror li,
+        .light-mode .ProseMirror blockquote {
+          color: #374151 !important;
+        }
+        
+        .dark-mode .ProseMirror code {
+          background: rgba(139, 92, 246, 0.2) !important;
+          color: #a78bfa !important;
+          border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        
+        .light-mode .ProseMirror code {
+          background: rgba(139, 92, 246, 0.1) !important;
+          color: #7c3aed !important;
+          border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        
+        .dark-mode .ProseMirror pre {
+          background: #1a1a1a !important;
+          color: #10b981 !important;
+          border-left: 4px solid #10b981;
+        }
+        
+        .light-mode .ProseMirror pre {
+          background: #f3f4f6 !important;
+          color: #059669 !important;
+          border-left: 4px solid #059669;
+        }
+        
+        .dark-mode .ProseMirror blockquote {
+          border-left: 4px solid #3b82f6;
+          background: rgba(59, 130, 246, 0.1) !important;
+          color: #e5e7eb !important;
+        }
+        
+        .light-mode .ProseMirror blockquote {
+          border-left: 4px solid #3b82f6;
+          background: rgba(59, 130, 246, 0.05) !important;
+          color: #374151 !important;
+        }
+        
+        .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
+          text-decoration: line-through;
+          opacity: 0.6;
+        }
+        
+        .ProseMirror ul[data-type="taskList"] li > label {
+          margin-right: 0.5rem;
+        }
+        
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+          width: 1rem;
+          height: 1rem;
+          border-radius: 0.25rem;
+          border: 2px solid #d1d5db;
+          margin: 0;
+        }
+        
+        .dark-mode .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+          border-color: #6b7280;
+          background: transparent;
+        }
+        
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+          background: #3b82f6;
+          border-color: #3b82f6;
+        }
+      `}</style>
     </div>
   );
 };

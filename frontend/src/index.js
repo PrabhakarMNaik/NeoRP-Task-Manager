@@ -1,3 +1,5 @@
+// Version 8 - Application entry point
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
