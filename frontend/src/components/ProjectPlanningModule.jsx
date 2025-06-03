@@ -1,7 +1,8 @@
-// Version 5 - Enhanced UI with better font colors, improved timer, and optimized layout
+// Version 6 - Enhanced with TipTap Block Editor
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Plus, Edit3, Trash2, Code, Image, FileText, Sun, Moon, Calendar, User, Clock, Link, X, Search, Play, Pause, RotateCcw, Eye, EyeOff, Timer, Bell } from 'lucide-react';
+import BlockEditor from './BlockEditor';
 
 const ProjectPlanningModule = () => {
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -28,11 +29,7 @@ const ProjectPlanningModule = () => {
   const [timerMode, setTimerMode] = useState('countup');
   const [pomodoroTime, setPomodoroTime] = useState(25 * 60);
   const [currentTimerTime, setCurrentTimerTime] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
-  const [showSlashMenu, setShowSlashMenu] = useState(false);
-  const [slashMenuPosition, setSlashMenuPosition] = useState({ x: 0, y: 0 });
   const [notificationShown, setNotificationShown] = useState(false);
-  const editorRef = useRef(null);
 
   // API Base URL
   const API_BASE = 'http://localhost:3001/api';
@@ -101,44 +98,6 @@ const ProjectPlanningModule = () => {
     }
   }, [activeTimer, selectedTask, isModalOpen, timerMode, notificationShown]);
 
-  // Slash commands configuration
-  const slashCommands = [
-    { label: 'Heading 1', command: '# ', icon: '📝' },
-    { label: 'Heading 2', command: '## ', icon: '📄' },
-    { label: 'Heading 3', command: '### ', icon: '📃' },
-    { label: 'Code Block', command: '```\n\n```', icon: '💻' },
-    { label: 'Quote', command: '> ', icon: '💬' },
-    { label: 'Bullet List', command: '- ', icon: '•' },
-    { label: 'Numbered List', command: '1. ', icon: '🔢' },
-    { label: 'Task List', command: '- [ ] ', icon: '☑️' },
-    { label: 'Divider', command: '\n---\n', icon: '➖' },
-  ];
-
-  // Handle clipboard paste with better image support
-  useEffect(() => {
-    const handlePaste = async (e) => {
-      if (!isModalOpen || !selectedTask || !isEditing) return;
-      
-      const items = e.clipboardData?.items;
-      if (!items) return;
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.indexOf('image') !== -1) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          await handleImageFromClipboard(file);
-          break;
-        }
-      }
-    };
-
-    if (isModalOpen && isEditing) {
-      document.addEventListener('paste', handlePaste);
-      return () => document.removeEventListener('paste', handlePaste);
-    }
-  }, [isModalOpen, selectedTask, editorContent, isEditing]);
-
   const showPomodoroNotification = () => {
     // Play soothing notification sound
     try {
@@ -165,57 +124,6 @@ const ProjectPlanningModule = () => {
   const requestNotificationPermission = () => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
-    }
-  };
-
-  const handleImageFromClipboard = async (file) => {
-    try {
-      // Create a more robust image handler
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      img.onload = () => {
-        // Resize image if too large
-        const maxWidth = 800;
-        const maxHeight = 600;
-        let { width, height } = img;
-        
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width *= ratio;
-          height *= ratio;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        const imageMarkdown = `\n![Pasted Image](${dataUrl})\n`;
-        
-        // Insert at cursor position
-        const cursorPosition = editorRef.current?.selectionStart || editorContent.length;
-        const newContent = 
-          editorContent.slice(0, cursorPosition) + 
-          imageMarkdown + 
-          editorContent.slice(cursorPosition);
-        
-        setEditorContent(newContent);
-        
-        // Update task
-        const updatedTask = { ...selectedTask, description: newContent };
-        setSelectedTask(updatedTask);
-        updateTask(updatedTask);
-      };
-      
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error handling clipboard image:', error);
     }
   };
 
@@ -439,7 +347,7 @@ const ProjectPlanningModule = () => {
       setSelectedTask(updatedTask);
     }
 
-    setTimeout(() => saveTask(updatedTask), 500);
+    saveTask(updatedTask); // Save immediately
   };
 
   const archiveTask = async (taskId) => {
@@ -496,7 +404,8 @@ const ProjectPlanningModule = () => {
       const response = await fetch(`${API_BASE}/tasks/${taskId}`);
       const task = await response.json();
       if (task) {
-        setSelectedTask(task);
+        const editorContent = task.editorContent || parseMarkdownToTipTap(task.description);
+        setSelectedTask({ ...task, editorContent });
         setEditorContent(task.description);
       }
     } catch (error) {
@@ -513,284 +422,133 @@ const ProjectPlanningModule = () => {
     }
   };
 
-  const renderMarkdown = (text) => {
-    return text
-      .split('\n')
-      .map((line, index) => {
-        const imageMatch = line.match(/!\[([^\]]*)\]\(([^)]+)\)/);
-        if (imageMatch) {
-          return (
-            <img 
-              key={index} 
-              src={imageMatch[2]} 
-              alt={imageMatch[1]} 
-              className="max-w-full h-auto my-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-600"
-            />
-          );
-        }
-
-        const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/);
-        if (linkMatch) {
-          return (
-            <p key={index} className="mb-3">
-              <a 
-                href={linkMatch[2]} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline decoration-blue-300 underline-offset-2"
-              >
-                {linkMatch[1]}
-              </a>
-            </p>
-          );
-        }
-
-        const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
-        if (urlMatch) {
-          return (
-            <p key={index} className="mb-3">
-              <a 
-                href={urlMatch[1]} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline decoration-blue-300 underline-offset-2 break-all"
-              >
-                {urlMatch[1]}
-              </a>
-            </p>
-          );
-        }
-
-        if (line.startsWith('# ')) {
-          return <h1 key={index} className="text-3xl font-bold mb-4 mt-6 text-gray-900 dark:text-white">{line.slice(2)}</h1>;
-        }
-        if (line.startsWith('## ')) {
-          return <h2 key={index} className="text-2xl font-semibold mb-3 mt-5 text-gray-800 dark:text-gray-100">{line.slice(3)}</h2>;
-        }
-        if (line.startsWith('### ')) {
-          return <h3 key={index} className="text-xl font-medium mb-2 mt-4 text-gray-700 dark:text-gray-200">{line.slice(4)}</h3>;
-        }
-        if (line.startsWith('```')) {
-          return <div key={index} className="font-mono text-sm bg-gray-900 text-green-400 p-4 rounded-lg my-4 border-l-4 border-green-500 shadow-lg">{line}</div>;
-        }
-        if (line.startsWith('- [ ] ')) {
-          return <div key={index} className="flex items-center mb-2"><input type="checkbox" className="mr-2" /><span className="text-gray-800 dark:text-gray-200">{line.slice(6)}</span></div>;
-        }
-        if (line.startsWith('- [x] ')) {
-          return <div key={index} className="flex items-center mb-2"><input type="checkbox" checked className="mr-2" /><span className="line-through text-gray-500 dark:text-gray-400">{line.slice(6)}</span></div>;
-        }
-        if (line.startsWith('- ')) {
-          return <li key={index} className="ml-6 list-disc mb-1 text-base leading-relaxed text-gray-800 dark:text-gray-200">{line.slice(2)}</li>;
-        }
-        if (line.startsWith('* ')) {
-          return <li key={index} className="ml-6 list-disc mb-1 text-base leading-relaxed text-gray-800 dark:text-gray-200">{line.slice(2)}</li>;
-        }
-        if (line.match(/^\d+\. /)) {
-          return <li key={index} className="ml-6 list-decimal mb-1 text-base leading-relaxed text-gray-800 dark:text-gray-200">{line.replace(/^\d+\. /, '')}</li>;
-        }
-        if (line.startsWith('> ')) {
-          return <blockquote key={index} className="border-l-4 border-blue-500 pl-4 italic my-4 bg-blue-50 dark:bg-blue-900/20 py-3 rounded-r-lg text-base leading-relaxed text-gray-700 dark:text-gray-300">{line.slice(2)}</blockquote>;
-        }
-        if (line.trim() === '---') {
-          return <hr key={index} className="my-6 border-gray-300 dark:border-gray-600" />;
-        }
-        if (line.trim() === '') {
-          return <div key={index} className="h-4"></div>;
-        }
-        
-        const processedLine = line
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/`(.*?)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded font-mono text-sm">$1</code>');
-        
-        return <p key={index} className="mb-3 leading-relaxed text-base text-gray-800 dark:text-gray-200" dangerouslySetInnerHTML={{__html: processedLine}}></p>;
-      });
-  };
-
-  const handleSlashCommand = (command) => {
-    const cursorPosition = editorRef.current?.selectionStart || editorContent.length;
-    const beforeSlash = editorContent.lastIndexOf('/', cursorPosition - 1);
+  // Parse markdown to TipTap format
+  const parseMarkdownToTipTap = (markdown) => {
+    if (!markdown) return { type: 'doc', content: [{ type: 'paragraph' }] };
     
-    const newContent = 
-      editorContent.slice(0, beforeSlash) + 
-      command + 
-      editorContent.slice(cursorPosition);
+    // Simple parser - you might want to use a proper markdown parser
+    const lines = markdown.split('\n');
+    const content = [];
     
-    setEditorContent(newContent);
-    setShowSlashMenu(false);
-    
-    const updatedTask = { ...selectedTask, description: newContent };
-    setSelectedTask(updatedTask);
-    updateTask(updatedTask);
-    
-    setTimeout(() => {
-      editorRef.current?.focus();
-      const newCursorPos = beforeSlash + command.length;
-      editorRef.current?.setSelectionRange(newCursorPos, newCursorPos);
-    }, 0);
-  };
-
-  const handleEditorKeyDown = (e) => {
-    if (e.key === '/') {
-      setTimeout(() => {
-        const rect = editorRef.current?.getBoundingClientRect();
-        if (rect) {
-          setSlashMenuPosition({
-            x: rect.left + 20,
-            y: rect.top + 40
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      
+      if (line.startsWith('# ')) {
+        content.push({
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: line.slice(2) }]
+        });
+      } else if (line.startsWith('## ')) {
+        content.push({
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: line.slice(3) }]
+        });
+      } else if (line.startsWith('### ')) {
+        content.push({
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: line.slice(4) }]
+        });
+      } else if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
+        // Handle task lists
+        const taskItems = [];
+        while (i < lines.length && (lines[i].startsWith('- [ ] ') || lines[i].startsWith('- [x] '))) {
+          taskItems.push({
+            type: 'taskItem',
+            attrs: { checked: lines[i].startsWith('- [x] ') },
+            content: [{
+              type: 'paragraph',
+              content: [{ type: 'text', text: lines[i].slice(6) }]
+            }]
           });
-          setShowSlashMenu(true);
+          i++;
         }
-      }, 0);
-    } else if (e.key === 'Escape') {
-      setShowSlashMenu(false);
-      if (isEditing) {
-        setIsEditing(false);
+        i--; // Adjust for the outer loop increment
+        content.push({
+          type: 'taskList',
+          content: taskItems
+        });
+      } else if (line.startsWith('- ')) {
+        // Handle bullet lists
+        const listItems = [];
+        while (i < lines.length && lines[i].startsWith('- ')) {
+          listItems.push({
+            type: 'listItem',
+            content: [{
+              type: 'paragraph',
+              content: [{ type: 'text', text: lines[i].slice(2) }]
+            }]
+          });
+          i++;
+        }
+        i--; // Adjust for the outer loop increment
+        content.push({
+          type: 'bulletList',
+          content: listItems
+        });
+      } else if (line.match(/^\d+\. /)) {
+        // Handle ordered lists
+        const listItems = [];
+        while (i < lines.length && lines[i].match(/^\d+\. /)) {
+          listItems.push({
+            type: 'listItem',
+            content: [{
+              type: 'paragraph',
+              content: [{ type: 'text', text: lines[i].replace(/^\d+\. /, '') }]
+            }]
+          });
+          i++;
+        }
+        i--; // Adjust for the outer loop increment
+        content.push({
+          type: 'orderedList',
+          content: listItems
+        });
+      } else if (line.startsWith('> ')) {
+        content.push({
+          type: 'blockquote',
+          content: [{
+            type: 'paragraph',
+            content: [{ type: 'text', text: line.slice(2) }]
+          }]
+        });
+      } else if (line === '---') {
+        content.push({ type: 'horizontalRule' });
+      } else if (line.startsWith('```')) {
+        // Handle code blocks
+        i++;
+        let codeContent = '';
+        while (i < lines.length && !lines[i].startsWith('```')) {
+          codeContent += lines[i] + '\n';
+          i++;
+        }
+        content.push({
+          type: 'codeBlock',
+          content: codeContent ? [{ type: 'text', text: codeContent.trimEnd() }] : []
+        });
+      } else if (line.match(/!\[([^\]]*)\]\(([^)]+)\)/)) {
+        const match = line.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+        content.push({
+          type: 'image',
+          attrs: { src: match[2], alt: match[1] }
+        });
+      } else if (line.trim()) {
+        content.push({
+          type: 'paragraph',
+          content: [{ type: 'text', text: line }]
+        });
       }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = e.target.selectionStart;
-      const end = e.target.selectionEnd;
-      const newValue = editorContent.substring(0, start) + '  ' + editorContent.substring(end);
-      setEditorContent(newValue);
-      setTimeout(() => {
-        e.target.selectionStart = e.target.selectionEnd = start + 2;
-      }, 0);
-    } else {
-      setShowSlashMenu(false);
+      
+      i++;
     }
-  };
-
-  // Enhanced Notion-style editor component with improved styling
-  const NotionStyleEditor = ({ value, onChange, isDarkMode }) => {
-    const [localValue, setLocalValue] = useState(value);
-    const textareaRef = useRef(null);
-
-    useEffect(() => {
-      setLocalValue(value);
-    }, [value]);
-
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        if (localValue !== value && localValue.trim()) {
-          onChange(localValue);
-        }
-      }, 500);
-      return () => clearTimeout(timer);
-    }, [localValue, onChange, value]);
-
-    const handleClick = () => {
-      setIsEditing(true);
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          textareaRef.current.setSelectionRange(localValue.length, localValue.length);
-        }
-      }, 0);
+    
+    return {
+      type: 'doc',
+      content: content.length > 0 ? content : [{ type: 'paragraph' }]
     };
-
-    const handleChange = (e) => {
-      setLocalValue(e.target.value);
-    };
-
-    const handleBlur = (e) => {
-      // Only blur if clicking outside the editor area
-      const relatedTarget = e.relatedTarget;
-      if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
-        setTimeout(() => setIsEditing(false), 150);
-      }
-    };
-
-    return (
-      <div className="h-full relative">
-        {/* Improved Documentation Area with glass effects and proper borders */}
-        <div 
-          className={`relative h-full overflow-y-auto rounded-2xl border-2 shadow-2xl ${
-            isEditing ? 'editing border-blue-400 dark:border-blue-500' : 'viewing border-gray-200/50 dark:border-gray-700/50'
-          } ${
-            isDarkMode 
-              ? 'bg-gray-800/70 backdrop-blur-xl' 
-              : 'bg-white/80 backdrop-blur-xl'
-          }`}
-          onClick={handleClick}
-          style={{
-            backdropFilter: 'blur(20px)',
-            background: isDarkMode 
-              ? 'rgba(31, 41, 55, 0.7)' 
-              : 'rgba(255, 255, 255, 0.8)',
-            boxShadow: isDarkMode
-              ? '0 25px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-              : '0 25px 50px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
-          }}
-        >
-          {isEditing ? (
-            <textarea
-              ref={textareaRef}
-              value={localValue}
-              onChange={handleChange}
-              onKeyDown={handleEditorKeyDown}
-              onBlur={handleBlur}
-              className={`absolute inset-0 w-full h-full p-8 border-none outline-none resize-none text-lg leading-relaxed bg-transparent ${
-                isDarkMode 
-                  ? 'text-white placeholder-gray-400' 
-                  : 'text-gray-900 placeholder-gray-500'
-              }`}
-              placeholder="Start writing your documentation... Type / for commands"
-              style={{ 
-                fontFamily: '"Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif',
-              }}
-            />
-          ) : (
-            <div
-              className={`w-full h-full p-8 cursor-text transition-all duration-200 ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}
-            >
-              {localValue ? (
-                <div className="prose prose-lg max-w-none dark:prose-invert">
-                  {renderMarkdown(localValue)}
-                </div>
-              ) : (
-                <div className={`italic text-xl ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Click here to start documenting your task...
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {showSlashMenu && (
-          <div 
-            className={`fixed z-50 border rounded-xl shadow-2xl min-w-[200px] ${
-              isDarkMode 
-                ? 'bg-gray-800/90 border-gray-600 backdrop-blur-xl' 
-                : 'bg-white/90 border-gray-200 backdrop-blur-xl'
-            }`}
-            style={{ 
-              left: slashMenuPosition.x, 
-              top: slashMenuPosition.y,
-            }}
-          >
-            <div className="p-2">
-              {slashCommands.map((cmd, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSlashCommand(cmd.command)}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center space-x-3 ${
-                    isDarkMode 
-                      ? 'hover:bg-gray-700 text-white' 
-                      : 'hover:bg-gray-100 text-gray-900'
-                  }`}
-                >
-                  <span className="text-lg">{cmd.icon}</span>
-                  <span>{cmd.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
   };
 
   const LinkModal = () => {
@@ -893,7 +651,8 @@ const ProjectPlanningModule = () => {
       draggable
       onDragStart={(e) => handleDragStart(e, task, columnId)}
       onClick={() => {
-        setSelectedTask(task);
+        const editorContent = task.editorContent || parseMarkdownToTipTap(task.description);
+        setSelectedTask({ ...task, editorContent });
         setEditorContent(task.description || '');
         setIsModalOpen(true);
       }}
@@ -1112,7 +871,7 @@ const ProjectPlanningModule = () => {
                           onChange={(e) => {
                             const updatedTask = {...selectedTask, dueDate: e.target.value};
                             setSelectedTask(updatedTask);
-                            updateTask(updatedTask);
+                            saveTask(updatedTask); // Remove setTimeout and save immediately
                           }}
                           className={`bg-transparent border-none outline-none focus:ring-1 focus:ring-blue-500/50 rounded px-1 ${
                             isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -1151,7 +910,7 @@ const ProjectPlanningModule = () => {
                       onChange={(e) => {
                         const updatedTask = {...selectedTask, assignee: e.target.value};
                         setSelectedTask(updatedTask);
-                        updateTask(updatedTask);
+                        saveTask(updatedTask); // Remove setTimeout and save immediately
                       }}
                       className={`bg-transparent border-none outline-none focus:ring-1 focus:ring-blue-500/50 rounded px-2 py-1 w-24 text-sm ${
                         isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -1168,7 +927,7 @@ const ProjectPlanningModule = () => {
                     onChange={(e) => {
                       const updatedTask = {...selectedTask, title: e.target.value};
                       setSelectedTask(updatedTask);
-                      updateTask(updatedTask);
+                      saveTask(updatedTask); // Remove setTimeout and save immediately
                     }}
                     className={`text-xl font-bold bg-transparent border-none outline-none focus:ring-2 focus:ring-blue-500/50 rounded-lg p-2 transition-all text-center w-full ${
                       isDarkMode ? 'text-white' : 'text-gray-900'
@@ -1230,19 +989,93 @@ const ProjectPlanningModule = () => {
                     <span className={`text-sm ${
                       isDarkMode ? 'text-gray-400' : 'text-gray-600'
                     }`}>
-                      {isEditing ? 'Editing' : 'Viewing'} • Ctrl+V to paste images • Auto-saved
+                      Type '/' for commands • Auto-saved
                     </span>
                   </div>
-                  <div className="flex-1 overflow-hidden">
-                    <NotionStyleEditor 
-                      value={editorContent}
-                      onChange={(value) => {
-                        setEditorContent(value);
-                        const updatedTask = {...selectedTask, description: value};
+                  <div className="flex-1 overflow-y-auto">
+                    <BlockEditor 
+                      value={selectedTask.editorContent}
+                      onChange={(content) => {
+                        // Convert TipTap JSON to markdown for backward compatibility
+                        const convertToMarkdown = (json) => {
+                          if (typeof json === 'string') return json;
+                          
+                          let markdown = '';
+                          const processNode = (node) => {
+                            if (!node) return '';
+                            
+                            switch (node.type) {
+                              case 'heading':
+                                const level = node.attrs?.level || 1;
+                                const prefix = '#'.repeat(level);
+                                markdown += `${prefix} ${node.content?.[0]?.text || ''}\n\n`;
+                                break;
+                              case 'paragraph':
+                                markdown += `${node.content?.map(n => n.text || '').join('') || ''}\n\n`;
+                                break;
+                              case 'bulletList':
+                                node.content?.forEach(item => {
+                                  const text = item.content?.[0]?.content?.[0]?.text || '';
+                                  markdown += `- ${text}\n`;
+                                });
+                                markdown += '\n';
+                                break;
+                              case 'orderedList':
+                                node.content?.forEach((item, index) => {
+                                  const text = item.content?.[0]?.content?.[0]?.text || '';
+                                  markdown += `${index + 1}. ${text}\n`;
+                                });
+                                markdown += '\n';
+                                break;
+                              case 'taskList':
+                                node.content?.forEach(item => {
+                                  const checked = item.attrs?.checked ? 'x' : ' ';
+                                  const text = item.content?.[0]?.content?.[0]?.text || '';
+                                  markdown += `- [${checked}] ${text}\n`;
+                                });
+                                markdown += '\n';
+                                break;
+                              case 'blockquote':
+                                const quoteText = node.content?.[0]?.content?.[0]?.text || '';
+                                markdown += `> ${quoteText}\n\n`;
+                                break;
+                              case 'codeBlock':
+                                markdown += '```\n';
+                                markdown += node.content?.map(n => n.text || '').join('') || '';
+                                markdown += '\n```\n\n';
+                                break;
+                              case 'horizontalRule':
+                                markdown += '---\n\n';
+                                break;
+                              case 'image':
+                                markdown += `![Image](${node.attrs?.src || ''})\n\n`;
+                                break;
+                              default:
+                                if (node.content) {
+                                  node.content.forEach(processNode);
+                                }
+                            }
+                          };
+                          
+                          if (json.content) {
+                            json.content.forEach(processNode);
+                          }
+                          
+                          return markdown.trim();
+                        };
+                        
+                        const markdownContent = convertToMarkdown(content);
+                        const updatedTask = {
+                          ...selectedTask, 
+                          description: markdownContent,
+                          editorContent: content // Store the JSON for editor
+                        };
                         setSelectedTask(updatedTask);
                         updateTask(updatedTask);
                       }}
                       isDarkMode={isDarkMode}
+                      selectedTask={selectedTask}
+                      updateTask={updateTask}
                     />
                   </div>
                 </div>
