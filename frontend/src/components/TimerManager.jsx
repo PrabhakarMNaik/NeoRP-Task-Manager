@@ -1,4 +1,4 @@
-// Version 8 - Global timer state management
+// Version 9 - Performance optimized global timer state management
 
 class TimerManagerClass {
   constructor() {
@@ -10,6 +10,8 @@ class TimerManagerClass {
     this.timerMode = 'countup'; // 'countup' or 'countdown'
     this.countdownTime = 0;
     this.pomodoroNotificationShown = false;
+    this.lastSaveTime = {};
+    this.saveThrottle = 10000; // Save every 10 seconds instead of every second
   }
 
   // Subscribe to timer updates
@@ -20,15 +22,22 @@ class TimerManagerClass {
     };
   }
 
-  // Notify all listeners
+  // Notify all listeners - throttled for performance
   notify() {
-    this.listeners.forEach(callback => callback({
-      activeTaskId: this.activeTaskId,
-      isRunning: this.isRunning,
-      timeSpent: { ...this.timeSpent },
-      timerMode: this.timerMode,
-      countdownTime: this.countdownTime
-    }));
+    // Use requestAnimationFrame for smooth UI updates
+    if (this.notifyScheduled) return;
+    this.notifyScheduled = true;
+    
+    requestAnimationFrame(() => {
+      this.listeners.forEach(callback => callback({
+        activeTaskId: this.activeTaskId,
+        isRunning: this.isRunning,
+        timeSpent: { ...this.timeSpent },
+        timerMode: this.timerMode,
+        countdownTime: this.countdownTime
+      }));
+      this.notifyScheduled = false;
+    });
   }
 
   // Start timer for a specific task
@@ -63,7 +72,7 @@ class TimerManagerClass {
     // Request notification permission
     this.requestNotificationPermission();
 
-    // Start interval
+    // Start interval with performance considerations
     this.interval = setInterval(() => {
       if (mode === 'countup') {
         this.timeSpent[taskId] = (this.timeSpent[taskId] || 0) + 1;
@@ -78,6 +87,13 @@ class TimerManagerClass {
           this.pauseTimer();
         }
       }
+      
+      // Throttled backend save - only save every 10 seconds
+      if (!this.lastSaveTime[taskId] || Date.now() - this.lastSaveTime[taskId] > this.saveThrottle) {
+        this.saveTimeToBackend(taskId);
+        this.lastSaveTime[taskId] = Date.now();
+      }
+      
       this.notify();
     }, 1000);
 
@@ -87,6 +103,11 @@ class TimerManagerClass {
 
   // Pause/stop timer
   pauseTimer() {
+    if (this.activeTaskId) {
+      // Final save when pausing
+      this.saveTimeToBackend(this.activeTaskId);
+    }
+    
     this.isRunning = false;
     if (this.interval) {
       clearInterval(this.interval);
@@ -182,33 +203,56 @@ class TimerManagerClass {
     }
   }
 
-  // Save time to backend
+  // Save time to backend - optimized with error handling
   async saveTimeToBackend(taskId) {
     if (this.timeSpent[taskId]) {
       try {
-        await fetch(`http://localhost:3001/api/tasks/${taskId}/time`, {
+        const response = await fetch(`http://localhost:3001/api/tasks/${taskId}/time`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ timeSpent: this.timeSpent[taskId] }),
         });
+        
+        if (!response.ok) {
+          console.warn('Failed to save time to backend for task:', taskId);
+        }
       } catch (error) {
-        console.error('Error saving time to backend:', error);
+        console.warn('Error saving time to backend:', error);
+        // Don't throw error to avoid disrupting timer functionality
       }
     }
   }
 
   // Load time from backend
   async loadTimeFromBackend(tasks) {
-    tasks.forEach(task => {
-      if (task.timeSpent) {
-        this.timeSpent[task.id] = task.timeSpent;
-      }
-    });
-    this.notify();
+    try {
+      tasks.forEach(task => {
+        if (task.timeSpent) {
+          this.timeSpent[task.id] = task.timeSpent;
+        }
+      });
+      this.notify();
+    } catch (error) {
+      console.warn('Error loading time from backend:', error);
+    }
+  }
+
+  // Cleanup method for component unmounting
+  cleanup() {
+    this.pauseTimer();
+    this.listeners = [];
+    if (this.interval) {
+      clearInterval(this.interval);
+    }
   }
 }
 
 // Create singleton instance
 const TimerManager = new TimerManagerClass();
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  TimerManager.cleanup();
+});
 
 export default TimerManager;

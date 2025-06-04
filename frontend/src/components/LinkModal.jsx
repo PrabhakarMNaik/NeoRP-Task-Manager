@@ -1,9 +1,9 @@
-// Version 8 - Task linking modal
+// Version 9 - Fixed immediate visibility of linked tasks
 
 import React, { useState } from 'react';
 import { X, Search, Link } from 'lucide-react';
 
-const LinkModal = ({ isOpen, onClose, selectedTask, allTasks, onUpdate, isDarkMode }) => {
+const LinkModal = ({ isOpen, onClose, selectedTask, allTasks, onUpdate, onTaskUpdate, isDarkMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   if (!isOpen) return null;
@@ -23,7 +23,14 @@ const LinkModal = ({ isOpen, onClose, selectedTask, allTasks, onUpdate, isDarkMo
       });
       
       if (response.ok) {
-        await onUpdate(); // Ensure proper refresh
+        // Update the selected task immediately in the parent component
+        if (onTaskUpdate) {
+          const updatedLinkedTasks = [...(selectedTask.linkedTasks || []), targetTaskId];
+          onTaskUpdate({ ...selectedTask, linkedTasks: updatedLinkedTasks });
+        }
+        
+        // Also refresh the full task list
+        await onUpdate();
         onClose();
         setSearchTerm('');
       } else {

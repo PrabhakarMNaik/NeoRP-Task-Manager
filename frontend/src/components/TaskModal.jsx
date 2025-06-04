@@ -1,7 +1,7 @@
-// Version 8 - Fixed persistence, timer, and UI issues
+// Version 9 - Removed auto-save for performance, fixed linked tasks visibility
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Calendar, User, Link, Play, Pause, RotateCcw, Timer, Bell } from 'lucide-react';
+import { X, Calendar, User, Link, Play, Pause, RotateCcw, Timer, Bell, Save } from 'lucide-react';
 import BlockEditor from './BlockEditor';
 import TimerManager from './TimerManager';
 
@@ -16,6 +16,8 @@ const TaskModal = ({
   pomodoroSettings 
 }) => {
   const [selectedTask, setSelectedTask] = useState(task);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [timerState, setTimerState] = useState({
     activeTaskId: null,
     isRunning: false,
@@ -34,34 +36,54 @@ const TaskModal = ({
   // Update local task when prop changes
   useEffect(() => {
     setSelectedTask(task);
+    setHasUnsavedChanges(false);
   }, [task]);
 
-  // Optimized save function - reduced debounce time
-  const saveTask = useCallback(
-    debounce(async (taskToSave) => {
-      try {
-        const response = await fetch(`http://localhost:3001/api/tasks/${taskToSave.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(taskToSave),
-        });
-        
-        if (response.ok) {
-          await TimerManager.saveTimeToBackend(taskToSave.id);
-        }
-      } catch (error) {
-        console.error('Error saving task:', error);
+  // Manual save function - no auto-save for performance
+  const saveTask = useCallback(async () => {
+    if (!hasUnsavedChanges || isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/tasks/${selectedTask.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedTask),
+      });
+      
+      if (response.ok) {
+        await TimerManager.saveTimeToBackend(selectedTask.id);
+        setHasUnsavedChanges(false);
+        // Refresh the parent component to show updates
+        onUpdate();
       }
-    }, 300),
-    []
-  );
+    } catch (error) {
+      console.error('Error saving task:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedTask, hasUnsavedChanges, isSaving, onUpdate]);
 
-  // Update task and save
-  const updateTask = (updatedFields) => {
-    const updatedTask = { ...selectedTask, ...updatedFields };
-    setSelectedTask(updatedTask);
-    saveTask(updatedTask);
-  };
+  // Update task locally only - no auto-save
+  const updateTask = useCallback((updatedFields) => {
+    setSelectedTask(prev => ({ ...prev, ...updatedFields }));
+    setHasUnsavedChanges(true);
+  }, []);
+
+  // Save on Ctrl+S
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveTask();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, saveTask]);
 
   const archiveTask = async () => {
     try {
@@ -90,10 +112,11 @@ const TaskModal = ({
       });
       
       if (response.ok) {
-        onUpdate();
-        // Update local task
+        // Update local task immediately for instant UI feedback
         const updatedLinkedTasks = selectedTask.linkedTasks?.filter(id => id !== linkedTaskId) || [];
         setSelectedTask(prev => ({ ...prev, linkedTasks: updatedLinkedTasks }));
+        // Also refresh parent
+        onUpdate();
       }
     } catch (error) {
       console.error('Error unlinking task:', error);
@@ -106,6 +129,7 @@ const TaskModal = ({
       const linkedTask = await response.json();
       if (linkedTask) {
         setSelectedTask(linkedTask);
+        setHasUnsavedChanges(false);
       }
     } catch (error) {
       console.error('Error loading linked task:', error);
@@ -124,7 +148,6 @@ const TaskModal = ({
         pomodoroSettings.duration
       );
       if (!success) {
-        // Timer start was cancelled by user
         return;
       }
     }
@@ -151,6 +174,17 @@ const TaskModal = ({
     if (diffDays === 1) return { text: 'Due tomorrow', color: 'text-yellow-500' };
     if (diffDays <= 7) return { text: `${diffDays} days remaining`, color: 'text-yellow-500' };
     return { text: `${diffDays} days remaining`, color: 'text-green-500' };
+  };
+
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      const confirmClose = window.confirm('You have unsaved changes. Do you want to save before closing?');
+      if (confirmClose) {
+        saveTask().then(() => onClose());
+        return;
+      }
+    }
+    onClose();
   };
 
   const daysRemaining = getDaysRemaining();
@@ -235,6 +269,25 @@ const TaskModal = ({
 
             {/* Right Side - Actions */}
             <div className="flex items-center space-x-3">
+              {/* Save Button */}
+              <button
+                onClick={saveTask}
+                disabled={!hasUnsavedChanges || isSaving}
+                className={`btn-3d p-2 rounded-xl transition-all duration-200 ${
+                  hasUnsavedChanges && !isSaving
+                    ? 'bg-green-500 hover:bg-green-600 text-white'
+                    : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                }`}
+                style={{ borderRadius: '0.75rem' }}
+                title={hasUnsavedChanges ? 'Save Changes (Ctrl+S)' : 'No Changes to Save'}
+              >
+                {isSaving ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Save size={18} />
+                )}
+              </button>
+              
               <select
                 value={selectedTask.priority || 'medium'}
                 onChange={(e) => updateTask({ priority: e.target.value })}
@@ -263,7 +316,7 @@ const TaskModal = ({
                 📦
               </button>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className={`p-2 rounded-xl transition-colors ${
                   isDarkMode 
                     ? 'text-gray-400 hover:text-white hover:bg-gray-700' 
@@ -277,6 +330,16 @@ const TaskModal = ({
           </div>
         </div>
 
+        {/* Unsaved Changes Indicator */}
+        {hasUnsavedChanges && (
+          <div className="px-6 py-2 bg-yellow-500/10 border-b border-yellow-500/20">
+            <div className="flex items-center justify-center space-x-2 text-yellow-600 dark:text-yellow-400">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Unsaved changes - Press Ctrl+S to save</span>
+            </div>
+          </div>
+        )}
+
         {/* Modal Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Main Editor */}
@@ -286,7 +349,7 @@ const TaskModal = ({
                 <span className={`text-sm ${
                   isDarkMode ? 'text-gray-400' : 'text-gray-600'
                 }`}>
-                  Type '/' for commands • Auto-saved
+                  Type '/' for commands • Manual save with Ctrl+S
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto">
@@ -322,9 +385,17 @@ const TaskModal = ({
                 <div className={`flex justify-between p-3 rounded-xl ${
                   isDarkMode ? 'bg-gray-700/80' : 'bg-white/90'
                 }`}>
-                  <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Status:</span>
-                  <span className={`capitalize font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {selectedTask.status?.replace('-', ' ')}
+                  <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Due Date:</span>
+                  <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {selectedTask.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString() : 'Not set'}
+                  </span>
+                </div>
+                <div className={`flex justify-between p-3 rounded-xl ${
+                  isDarkMode ? 'bg-gray-700/80' : 'bg-white/90'
+                }`}>
+                  <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Total Time:</span>
+                  <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {formatTime(selectedTask.timeSpent || 0)}
                   </span>
                 </div>
                 
@@ -384,7 +455,9 @@ const TaskModal = ({
                     </div>
                     
                     <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Total Time: {formatTime(currentTimeSpent)}
+                      Session Time: {formatTime(currentTimeSpent)}
+                      <br />
+                      Saved Time: {formatTime(selectedTask.timeSpent || 0)}
                     </div>
                   </div>
                 </div>
@@ -462,18 +535,5 @@ const TaskModal = ({
     </div>
   );
 };
-
-// Debounce utility function
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
 
 export default TaskModal;

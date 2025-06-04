@@ -1,4 +1,4 @@
-/* Version 8 - Enhanced styles with fixed text visibility and rounded shadows */
+/* Version 9 - Fixed dark mode text visibility and exact font sizes */
 
 /* Import Tailwind CSS base, components, and utilities */
 @import 'tailwindcss/base';
@@ -156,39 +156,7 @@ body {
   background-clip: content-box;
 }
 
-/* Text visibility fixes */
-.text-light-mode {
-  color: #1f2937 !important;
-}
-
-.text-dark-mode {
-  color: #ffffff !important;
-}
-
-/* Column header text fixes */
-.column-header {
-  color: #ffffff !important;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-}
-
-/* Task info panel text fixes */
-.task-info-light {
-  color: #374151;
-}
-
-.task-info-dark {
-  color: #e5e7eb;
-}
-
-.task-info-label-light {
-  color: #6b7280;
-}
-
-.task-info-label-dark {
-  color: #9ca3af;
-}
-
-/* Editor content with proper font sizes */
+/* Editor content with proper font sizes - EXACT SIZES AS REQUESTED */
 .editor-content {
   min-height: 400px;
 }
@@ -198,43 +166,68 @@ body {
   padding: 1.5rem;
   border-radius: var(--border-radius-lg);
   min-height: 350px;
-  font-size: 14px; /* Normal text */
+  font-size: 14px !important; /* Normal text - EXACT 14px */
   line-height: 1.6;
 }
 
-/* Proper font sizes */
+/* EXACT FONT SIZES AS REQUESTED - Enhanced */
 .editor-content .ProseMirror h1 {
-  font-size: 28px !important;
+  font-size: 24px !important; /* EXACT 24px */
   font-weight: 700 !important;
   line-height: 1.2 !important;
   margin: 1.5rem 0 1rem 0 !important;
+  color: inherit !important;
 }
 
 .editor-content .ProseMirror h2 {
-  font-size: 22px !important;
+  font-size: 22px !important; /* EXACT 22px */
   font-weight: 600 !important;
   line-height: 1.3 !important;
   margin: 1.25rem 0 0.75rem 0 !important;
+  color: inherit !important;
 }
 
 .editor-content .ProseMirror h3 {
-  font-size: 18px !important;
+  font-size: 18px !important; /* EXACT 18px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
   margin: 1rem 0 0.5rem 0 !important;
+  color: inherit !important;
 }
 
 .editor-content .ProseMirror p {
-  font-size: 14px !important;
+  font-size: 14px !important; /* EXACT 14px */
   line-height: 1.6 !important;
   margin: 0.75rem 0 !important;
+  color: inherit !important;
 }
 
-/* Light mode editor text */
+/* Force header visibility in dark mode */
+.dark-mode .editor-content .ProseMirror h1 {
+  color: #ffffff !important;
+  font-size: 24px !important;
+}
+
+.dark-mode .editor-content .ProseMirror h2 {
+  color: #ffffff !important;
+  font-size: 22px !important;
+}
+
+.dark-mode .editor-content .ProseMirror h3 {
+  color: #ffffff !important;
+  font-size: 18px !important;
+}
+
+.dark-mode .editor-content .ProseMirror p {
+  color: #ffffff !important;
+  font-size: 14px !important;
+}
+
+/* CRITICAL FIX: Light mode editor text - FORCED VISIBILITY */
 .light-mode .ProseMirror,
-.light-mode .ProseMirror * {
-  color: #1f2937 !important;
-  caret-color: #1f2937 !important;
+.light-mode .ProseMirror *:not(code):not(pre) {
+  color: #111827 !important;
+  caret-color: #111827 !important;
 }
 
 .light-mode .ProseMirror h1,
@@ -243,18 +236,18 @@ body {
 .light-mode .ProseMirror h4,
 .light-mode .ProseMirror h5,
 .light-mode .ProseMirror h6 {
-  color: #111827 !important;
-  font-weight: 600;
+  color: #000000 !important; /* Pure black for maximum contrast */
+  font-weight: 700 !important;
 }
 
 .light-mode .ProseMirror p,
 .light-mode .ProseMirror li,
-.light-mode .ProseMirror span {
-  color: #374151 !important;
+.light-mode .ProseMirror span:not(.hljs-*) {
+  color: #1f2937 !important; /* Dark gray for good readability */
 }
 
 .light-mode .ProseMirror blockquote {
-  color: #4b5563 !important;
+  color: #374151 !important;
   background: rgba(59, 130, 246, 0.05) !important;
   border-left: 4px solid #3b82f6;
   padding: 1rem 1.5rem;
@@ -262,10 +255,10 @@ body {
   border-radius: 0.5rem;
 }
 
-/* Dark mode editor text */
+/* CRITICAL FIX: Dark mode editor text - FORCED WHITE VISIBILITY */
 .dark-mode .ProseMirror,
-.dark-mode .ProseMirror * {
-  color: #ffffff !important;
+.dark-mode .ProseMirror *:not(code):not(pre) {
+  color: #ffffff !important; /* PURE WHITE for maximum visibility */
   caret-color: #ffffff !important;
 }
 
@@ -275,18 +268,23 @@ body {
 .dark-mode .ProseMirror h4,
 .dark-mode .ProseMirror h5,
 .dark-mode .ProseMirror h6 {
-  color: #ffffff !important;
-  font-weight: 600;
+  color: #ffffff !important; /* PURE WHITE */
+  font-weight: 700 !important;
 }
 
 .dark-mode .ProseMirror p,
 .dark-mode .ProseMirror li,
-.dark-mode .ProseMirror span {
-  color: #e5e7eb !important;
+.dark-mode .ProseMirror span:not(.hljs-*),
+.dark-mode .ProseMirror div,
+.dark-mode .ProseMirror strong,
+.dark-mode .ProseMirror em,
+.dark-mode .ProseMirror b,
+.dark-mode .ProseMirror i {
+  color: #ffffff !important; /* PURE WHITE for all text */
 }
 
 .dark-mode .ProseMirror blockquote {
-  color: #d1d5db !important;
+  color: #f3f4f6 !important; /* Light gray */
   background: rgba(59, 130, 246, 0.1) !important;
   border-left: 4px solid #3b82f6;
   padding: 1rem 1.5rem;
@@ -294,7 +292,59 @@ body {
   border-radius: 0.5rem;
 }
 
-/* Code highlighting */
+/* Override any inherited styles that might make text invisible */
+.dark-mode .ProseMirror * {
+  color: inherit !important;
+}
+
+/* Force visibility for all text elements in dark mode */
+.dark-mode .editor-content .ProseMirror {
+  color: #ffffff !important;
+}
+
+.dark-mode .editor-content .ProseMirror p,
+.dark-mode .editor-content .ProseMirror span,
+.dark-mode .editor-content .ProseMirror div,
+.dark-mode .editor-content .ProseMirror li,
+.dark-mode .editor-content .ProseMirror h1,
+.dark-mode .editor-content .ProseMirror h2,
+.dark-mode .editor-content .ProseMirror h3,
+.dark-mode .editor-content .ProseMirror h4,
+.dark-mode .editor-content .ProseMirror h5,
+.dark-mode .editor-content .ProseMirror h6,
+.dark-mode .editor-content .ProseMirror strong,
+.dark-mode .editor-content .ProseMirror em,
+.dark-mode .editor-content .ProseMirror b,
+.dark-mode .editor-content .ProseMirror i {
+  color: #ffffff !important;
+}
+
+/* Ensure all text nodes in dark mode are white */
+.dark-mode .ProseMirror {
+  color: #ffffff !important;
+}
+
+.dark-mode .ProseMirror, 
+.dark-mode .ProseMirror p, 
+.dark-mode .ProseMirror h1, 
+.dark-mode .ProseMirror h2, 
+.dark-mode .ProseMirror h3, 
+.dark-mode .ProseMirror h4, 
+.dark-mode .ProseMirror h5, 
+.dark-mode .ProseMirror h6, 
+.dark-mode .ProseMirror li, 
+.dark-mode .ProseMirror span, 
+.dark-mode .ProseMirror div, 
+.dark-mode .ProseMirror strong, 
+.dark-mode .ProseMirror em, 
+.dark-mode .ProseMirror b, 
+.dark-mode .ProseMirror i,
+.dark-mode .ProseMirror ul,
+.dark-mode .ProseMirror ol {
+  color: #ffffff !important;
+}
+
+/* Code highlighting with proper contrast */
 .light-mode .ProseMirror code {
   background: rgba(139, 92, 246, 0.1) !important;
   color: #7c3aed !important;
@@ -307,7 +357,7 @@ body {
 
 .dark-mode .ProseMirror code {
   background: rgba(139, 92, 246, 0.2) !important;
-  color: #a78bfa !important;
+  color: #c4b5fd !important; /* Lighter purple for better visibility */
   border: 1px solid rgba(139, 92, 246, 0.3);
   padding: 0.25rem 0.5rem;
   border-radius: 0.375rem;
@@ -326,8 +376,8 @@ body {
 }
 
 .dark-mode .ProseMirror pre {
-  background: #1a1a1a !important;
-  color: #10b981 !important;
+  background: #1f2937 !important;
+  color: #34d399 !important; /* Brighter green for visibility */
   border-left: 4px solid #10b981;
   border-radius: 0.75rem;
   padding: 1.5rem;
@@ -335,7 +385,7 @@ body {
   overflow-x: auto;
 }
 
-/* List styling - Fixed for proper functionality */
+/* List styling - Enhanced for proper functionality */
 .editor-content .ProseMirror ul,
 .editor-content .ProseMirror ol {
   padding-left: 1.5rem !important;
@@ -356,14 +406,23 @@ body {
   line-height: 1.6 !important;
   font-size: 14px !important;
   display: list-item !important;
+  color: inherit !important;
+}
+
+/* Force list item visibility in dark mode */
+.dark-mode .editor-content .ProseMirror li,
+.dark-mode .editor-content .ProseMirror ul li,
+.dark-mode .editor-content .ProseMirror ol li {
+  color: #ffffff !important;
 }
 
 .editor-content .ProseMirror li p {
   margin: 0 !important;
   display: inline !important;
+  color: inherit !important;
 }
 
-/* Task list styling - Fixed checkboxes */
+/* Task list styling - Enhanced checkboxes */
 .editor-content .ProseMirror ul[data-type="taskList"] {
   list-style: none !important;
   padding-left: 0 !important;
@@ -387,6 +446,7 @@ body {
   display: flex !important;
   align-items: center !important;
   cursor: pointer !important;
+  flex-shrink: 0 !important;
 }
 
 .editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
@@ -399,9 +459,10 @@ body {
   appearance: none !important;
   -webkit-appearance: none !important;
   background: white !important;
+  position: relative !important;
 }
 
-.dark .editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+.dark-mode .editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
   border-color: #6b7280 !important;
   background: #374151 !important;
 }
@@ -409,10 +470,52 @@ body {
 .editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
   background: #3b82f6 !important;
   border-color: #3b82f6 !important;
-  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m13.854 3.646-7 7-.5.5-.5-.5-3.5-3.5.708-.708L6.5 9.793l6.646-6.647.708.5z'/%3e%3c/svg%3e") !important;
-  background-size: 12px !important;
-  background-position: center !important;
-  background-repeat: no-repeat !important;
+}
+
+.editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+  content: '✓' !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: white !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+}
+
+/* Image resizing styles - Enhanced */
+.editor-content .resizable-image {
+  max-width: 100%;
+  height: auto;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.editor-content .resizable-image:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: scale(1.02);
+  border-color: #3b82f6;
+}
+
+.editor-content .resizable-image.selected {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Image selection indicator */
+.editor-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.editor-content .ProseMirror img:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: scale(1.01);
 }
 
 /* Improved animation classes with rounded corners */
@@ -609,31 +712,6 @@ body {
   overflow: hidden;
 }
 
-/* Enhanced focus styles */
-.focus-visible:focus-visible {
-  outline: none;
-  box-shadow: 
-    0 0 0 2px rgba(59, 130, 246, 0.3),
-    0 0 20px rgba(59, 130, 246, 0.2),
-    0 8px 16px var(--shadow-color-light);
-}
-
-/* Enhanced backdrop blur for modals */
-.backdrop-blur-sm {
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.backdrop-blur {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
-.backdrop-blur-lg {
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-}
-
 /* Status indicators with glow effects */
 .status-indicator {
   width: 10px;
@@ -672,126 +750,6 @@ body {
 .status-cancelled { 
   background: linear-gradient(135deg, #ef4444, #dc2626);
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
-}
-
-/* Custom selection */
-::selection {
-  background: rgba(59, 130, 246, 0.3);
-  color: inherit;
-}
-
-::-moz-selection {
-  background: rgba(59, 130, 246, 0.3);
-  color: inherit;
-}
-
-/* Print styles */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  
-  .task-card {
-    break-inside: avoid;
-    margin-bottom: 1rem;
-    box-shadow: none;
-    border: 1px solid #e5e7eb;
-  }
-  
-  .modal-overlay {
-    position: relative !important;
-    background: transparent !important;
-    backdrop-filter: none !important;
-  }
-  
-  .glass-container {
-    background: white !important;
-    backdrop-filter: none !important;
-    border: 1px solid #e5e7eb !important;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .task-card {
-    border-width: 2px;
-  }
-  
-  .priority-high {
-    border: 2px solid #dc2626;
-  }
-  
-  .priority-medium {
-    border: 2px solid #d97706;
-  }
-  
-  .priority-low {
-    border: 2px solid #16a34a;
-  }
-  
-  .glass-container {
-    background: rgba(255, 255, 255, 0.9) !important;
-    border: 2px solid currentColor !important;
-  }
-}
-
-/* Reduced motion support */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  
-  .fade-in,
-  .slide-up,
-  .glow-pulse,
-  .pulse-glow {
-    animation: none !important;
-  }
-  
-  .task-card:hover,
-  .btn-3d:hover {
-    transform: none !important;
-  }
-}
-
-/* Focus indicators for accessibility */
-.focus-ring:focus {
-  outline: none;
-  box-shadow: 
-    0 0 0 2px rgba(59, 130, 246, 0.5),
-    0 0 20px rgba(59, 130, 246, 0.3);
-}
-
-/* Enhanced tooltip styling */
-.tooltip {
-  position: absolute;
-  z-index: 50;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  background: rgba(0, 0, 0, 0.9);
-  color: white;
-  border-radius: 0.5rem;
-  box-shadow: 
-    0 8px 16px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  transform: translateX(-50%);
-  top: -3rem;
-  left: 50%;
-  white-space: nowrap;
-}
-
-.tooltip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -6px;
-  border-width: 6px;
-  border-style: solid;
-  border-color: rgba(0, 0, 0, 0.9) transparent transparent transparent;
 }
 
 /* Range input styling for settings */
@@ -840,4 +798,50 @@ input[type="range"]::-moz-range-thumb {
 input[type="range"]::-moz-range-thumb:hover {
   transform: scale(1.1);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .fade-in,
+  .slide-up,
+  .glow-pulse,
+  .pulse-glow {
+    animation: none !important;
+  }
+  
+  .task-card:hover,
+  .btn-3d:hover {
+    transform: none !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Text selection */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+.dark-mode .editor-content .ProseMirror {
+  color: #ffffff !important;
+}
+
+.dark-mode .editor-content .ProseMirror p,
+.dark-mode .editor-content .ProseMirror li,
+.dark-mode .editor-content .ProseMirror h1,
+.dark-mode .editor-content .ProseMirror h2,
+.dark-mode .editor-content .ProseMirror h3 {
+  color: #ffffff !important;
 }

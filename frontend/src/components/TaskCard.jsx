@@ -1,10 +1,10 @@
-// Version 8 - Individual task card component
+// Version 9 - Performance optimized individual task card component
 
-import React from 'react';
+import React, { memo } from 'react';
 import { User, Calendar, Timer, FileText } from 'lucide-react';
 import TimerManager from './TimerManager';
 
-const TaskCard = ({ task, onDragStart, onOpenTask, isDarkMode, draggedTask }) => {
+const TaskCard = memo(({ task, onDragStart, onOpenTask, isDarkMode, draggedTask }) => {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'high': return 'bg-red-500';
@@ -18,7 +18,30 @@ const TaskCard = ({ task, onDragStart, onOpenTask, isDarkMode, draggedTask }) =>
     return TimerManager.formatTime(seconds);
   };
 
+  // Extract first line of description for preview
+  const getDescriptionPreview = (description) => {
+    if (!description) return 'No description';
+    
+    // Remove markdown headers and get first meaningful line
+    const lines = description.split('\n');
+    for (const line of lines) {
+      const cleanLine = line.replace(/^#+\s*/, '').trim();
+      if (cleanLine && cleanLine.length > 0) {
+        return cleanLine;
+      }
+    }
+    return 'No description';
+  };
+
   const isBeingDragged = draggedTask && draggedTask.id === task.id;
+
+  const handleDragStart = (e) => {
+    onDragStart(e, task);
+  };
+
+  const handleClick = () => {
+    onOpenTask(task);
+  };
 
   return (
     <div
@@ -30,8 +53,8 @@ const TaskCard = ({ task, onDragStart, onOpenTask, isDarkMode, draggedTask }) =>
           : 'bg-white/80 border-gray-200/50 hover:bg-white/90 backdrop-blur-xl text-gray-900'
       }`}
       draggable
-      onDragStart={(e) => onDragStart(e, task)}
-      onClick={() => onOpenTask(task)}
+      onDragStart={handleDragStart}
+      onClick={handleClick}
       style={{
         backdropFilter: 'blur(10px)',
         boxShadow: isDarkMode
@@ -59,7 +82,7 @@ const TaskCard = ({ task, onDragStart, onOpenTask, isDarkMode, draggedTask }) =>
       <p className={`text-sm mb-4 line-clamp-2 leading-relaxed ${
         isDarkMode ? 'text-gray-300' : 'text-gray-600'
       }`}>
-        {task.description?.split('\n')[0]?.replace(/^#+\s*/, '') || 'No description'}
+        {getDescriptionPreview(task.description)}
       </p>
       
       <div className="flex justify-between items-center text-xs">
@@ -89,17 +112,29 @@ const TaskCard = ({ task, onDragStart, onOpenTask, isDarkMode, draggedTask }) =>
             </div>
           )}
         </div>
-        {task.files?.length > 0 && (
-          <div className={`flex items-center space-x-1 px-2 py-1 rounded-full ${
-            isDarkMode ? 'bg-green-900/80 text-green-300' : 'bg-green-100/80 text-green-700'
-          }`}>
-            <FileText size={12} />
-            <span>{task.files.length}</span>
-          </div>
-        )}
+        <div className="flex items-center space-x-2">
+          {task.linkedTasks && task.linkedTasks.length > 0 && (
+            <div className={`flex items-center space-x-1 px-2 py-1 rounded-full ${
+              isDarkMode ? 'bg-purple-900/80 text-purple-300' : 'bg-purple-100/80 text-purple-700'
+            }`}>
+              <span>🔗</span>
+              <span>{task.linkedTasks.length}</span>
+            </div>
+          )}
+          {task.files?.length > 0 && (
+            <div className={`flex items-center space-x-1 px-2 py-1 rounded-full ${
+              isDarkMode ? 'bg-green-900/80 text-green-300' : 'bg-green-100/80 text-green-700'
+            }`}>
+              <FileText size={12} />
+              <span>{task.files.length}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
-};
+});
+
+TaskCard.displayName = 'TaskCard';
 
 export default TaskCard;

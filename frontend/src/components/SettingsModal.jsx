@@ -1,9 +1,9 @@
-// Version 8 - Settings modal for pomodoro timer
+// Version 9 - Performance optimized settings modal for pomodoro timer
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { X, Clock, Save, RotateCcw } from 'lucide-react';
 
-const SettingsModal = ({ isOpen, onClose, pomodoroSettings, onUpdateSettings, isDarkMode }) => {
+const SettingsModal = memo(({ isOpen, onClose, pomodoroSettings, onUpdateSettings, isDarkMode }) => {
   const [settings, setSettings] = useState(pomodoroSettings);
 
   if (!isOpen) return null;
@@ -167,6 +167,20 @@ const SettingsModal = ({ isOpen, onClose, pomodoroSettings, onUpdateSettings, is
               </div>
             </div>
           </div>
+
+          {/* Performance Note */}
+          <div className={`p-4 rounded-xl border ${
+            isDarkMode 
+              ? 'bg-green-900/20 border-green-500/30 text-green-200' 
+              : 'bg-green-50 border-green-200 text-green-700'
+          }`}>
+            <div className="text-sm">
+              <p className="font-medium mb-1">Performance Optimized</p>
+              <p className="text-xs opacity-90">
+                Timer automatically saves progress every 10 seconds to maintain system performance.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -207,6 +221,8 @@ const SettingsModal = ({ isOpen, onClose, pomodoroSettings, onUpdateSettings, is
       </div>
     </div>
   );
-};
+});
+
+SettingsModal.displayName = 'SettingsModal';
 
 export default SettingsModal;

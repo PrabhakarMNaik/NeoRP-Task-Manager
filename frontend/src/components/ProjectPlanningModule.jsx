@@ -1,4 +1,4 @@
-// Version 8 - Performance optimized main component
+// Version 9 - Performance optimized main component with restricted task creation
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Sun, Moon, Eye, EyeOff, Settings } from 'lucide-react';
@@ -74,19 +74,19 @@ const ProjectPlanningModule = () => {
     }
   }, []);
 
-  const handleDragStart = (e, task, fromColumn) => {
+  const handleDragStart = useCallback((e, task, fromColumn) => {
     setDraggedTask(task);
     setDraggedFrom(fromColumn);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', '');
-  };
+  }, []);
 
-  const handleDragOver = (e) => {
+  const handleDragOver = useCallback((e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-  };
+  }, []);
 
-  const handleDrop = async (e, toColumn) => {
+  const handleDrop = useCallback(async (e, toColumn) => {
     e.preventDefault();
     if (draggedTask && draggedFrom && draggedFrom !== toColumn) {
       // Optimistically update UI
@@ -108,6 +108,11 @@ const ProjectPlanningModule = () => {
         if (!response.ok) {
           // Revert on failure
           loadAllTasks();
+        } else {
+          // Update allTasks array for consistency
+          setAllTasks(prev => prev.map(task => 
+            task.id === draggedTask.id ? { ...task, status: toColumn } : task
+          ));
         }
       } catch (error) {
         console.error('Error updating task status:', error);
@@ -116,9 +121,16 @@ const ProjectPlanningModule = () => {
     }
     setDraggedTask(null);
     setDraggedFrom(null);
-  };
+  }, [draggedTask, draggedFrom, loadAllTasks]);
 
-  const createNewTask = async (columnId) => {
+  // Only allow task creation in backlog and planned columns
+  const createNewTask = useCallback(async (columnId) => {
+    // Restrict task creation to only backlog and planned
+    if (columnId !== 'backlog' && columnId !== 'planned') {
+      alert('Tasks can only be created in Backlog or Planned columns.');
+      return;
+    }
+
     try {
       const newTask = await createTask({
         title: 'New Task',
@@ -133,25 +145,71 @@ const ProjectPlanningModule = () => {
     } catch (error) {
       console.error('Error creating task:', error);
     }
-  };
+  }, [loadAllTasks]);
 
-  const openTask = (task) => {
+  const openTask = useCallback((task) => {
     setSelectedTask(task);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const closeTask = () => {
+  const closeTask = useCallback(() => {
     setIsModalOpen(false);
     setSelectedTask(null);
     TimerManager.pauseTimer(); // Pause timer when closing task
-  };
+  }, []);
 
-  const toggleColumnVisibility = (columnId) => {
+  const toggleColumnVisibility = useCallback((columnId) => {
     setHiddenColumns(prev => ({
       ...prev,
       [columnId]: !prev[columnId]
     }));
-  };
+  }, []);
+
+  // Handle task deletion
+  const handleDeleteTask = useCallback((taskId) => {
+    // Remove from local state immediately for instant UI feedback
+    setTasks(prev => {
+      const newTasks = { ...prev };
+      Object.keys(newTasks).forEach(status => {
+        newTasks[status] = newTasks[status].filter(task => task.id !== taskId);
+      });
+      return newTasks;
+    });
+    
+    setAllTasks(prev => prev.filter(task => task.id !== taskId));
+    
+    // Refresh to ensure consistency
+    loadAllTasks();
+  }, [loadAllTasks]);
+
+  // Handle task update in modal (for immediate linked task visibility)
+  const handleTaskUpdate = useCallback((updatedTask) => {
+    setSelectedTask(updatedTask);
+    
+    // Update in allTasks array
+    setAllTasks(prev => prev.map(task => 
+      task.id === updatedTask.id ? updatedTask : task
+    ));
+    
+    // Update in grouped tasks
+    setTasks(prev => {
+      const newTasks = { ...prev };
+      Object.keys(newTasks).forEach(status => {
+        newTasks[status] = newTasks[status].map(task => 
+          task.id === updatedTask.id ? updatedTask : task
+        );
+      });
+      return newTasks;
+    });
+  }, []);
+
+  const handleOpenLinkModal = useCallback(() => {
+    setIsLinkModalOpen(true);
+  }, []);
+
+  const handleCloseLinkModal = useCallback(() => {
+    setIsLinkModalOpen(false);
+  }, []);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${
@@ -174,9 +232,6 @@ const ProjectPlanningModule = () => {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               NeoRP Project Planning
             </h1>
-            <p className={`mt-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Professional task management with live documentation
-            </p>
           </div>
           
           <div className="flex items-center space-x-3">
@@ -222,6 +277,7 @@ const ProjectPlanningModule = () => {
               onCreateTask={createNewTask}
               onOpenTask={openTask}
               onToggleVisibility={toggleColumnVisibility}
+              onDeleteTask={handleDeleteTask}
               draggedTask={draggedTask}
             />
           ))}
@@ -263,7 +319,7 @@ const ProjectPlanningModule = () => {
           onUpdate={loadAllTasks}
           isDarkMode={isDarkMode}
           allTasks={allTasks}
-          onOpenLinkModal={() => setIsLinkModalOpen(true)}
+          onOpenLinkModal={handleOpenLinkModal}
           pomodoroSettings={pomodoroSettings}
         />
       )}
@@ -272,10 +328,11 @@ const ProjectPlanningModule = () => {
       {isLinkModalOpen && selectedTask && (
         <LinkModal
           isOpen={isLinkModalOpen}
-          onClose={() => setIsLinkModalOpen(false)}
+          onClose={handleCloseLinkModal}
           selectedTask={selectedTask}
           allTasks={allTasks}
           onUpdate={loadAllTasks}
+          onTaskUpdate={handleTaskUpdate}
           isDarkMode={isDarkMode}
         />
       )}

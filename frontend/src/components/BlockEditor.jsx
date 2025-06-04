@@ -1,4 +1,4 @@
-// Version 8 - Optimized rich text editor with fixed functionality
+// Version 9 - Fixed dark mode text visibility, rich text features, and added image resizing
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -17,6 +17,7 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
   const [showToolbar, setShowToolbar] = useState(false);
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   // Memoize editor configuration to prevent unnecessary recreations
   const editorConfig = useMemo(() => ({
@@ -42,7 +43,7 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
         inline: false,
         allowBase64: true,
         HTMLAttributes: {
-          class: 'editor-image',
+          class: 'editor-image resizable-image',
         },
       }),
       TaskList.configure({
@@ -87,7 +88,11 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
             reader.onload = (e) => {
               view.dispatch(
                 view.state.tr.replaceSelectionWith(
-                  view.state.schema.nodes.image.create({ src: e.target.result })
+                  view.state.schema.nodes.image.create({ 
+                    src: e.target.result,
+                    alt: 'Pasted image',
+                    title: 'Click to resize'
+                  })
                 )
               );
             };
@@ -110,13 +115,44 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
             const { tr } = state;
             const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
             if (pos) {
-              tr.insert(pos.pos, state.schema.nodes.image.create({ src: e.target.result }));
+              tr.insert(pos.pos, state.schema.nodes.image.create({ 
+                src: e.target.result,
+                alt: 'Dropped image',
+                title: 'Click to resize'
+              }));
               view.dispatch(tr);
             }
           };
           reader.readAsDataURL(imageFile);
           return true;
         }
+        return false;
+      },
+      handleClick: (view, pos, event) => {
+        // Find the node at the clicked position
+        const $pos = view.state.doc.resolve(pos);
+        let node = null;
+        let nodePos = pos;
+        
+        // Check if we clicked directly on an image
+        if (event.target && event.target.tagName === 'IMG') {
+          // Find the image node in the document
+          view.state.doc.descendants((n, p) => {
+            if (n.type.name === 'image' && n.attrs.src === event.target.src) {
+              node = n;
+              nodePos = p;
+              return false; // Stop searching
+            }
+          });
+          
+          if (node) {
+            setSelectedImage({ node, pos: nodePos, element: event.target });
+            return true;
+          }
+        }
+        
+        // Clear selection if clicked elsewhere
+        setSelectedImage(null);
         return false;
       },
     },
@@ -137,10 +173,39 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
 
   const editor = useEditor(editorConfig);
 
+  // Handle image resizing
+  const resizeImage = useCallback((width) => {
+    if (selectedImage && editor) {
+      const { pos } = selectedImage;
+      
+      // Get the current node at the position
+      const node = editor.state.doc.nodeAt(pos);
+      if (node && node.type.name === 'image') {
+        // Create new attributes with the width style
+        const attrs = { 
+          ...node.attrs, 
+          style: `width: ${width}px; height: auto; max-width: 100%;`,
+          width: width.toString()
+        };
+        
+        // Create a transaction to update the node
+        const tr = editor.state.tr.setNodeMarkup(pos, null, attrs);
+        editor.view.dispatch(tr);
+        
+        // Clear selection after resize
+        setSelectedImage(null);
+      }
+    }
+  }, [selectedImage, editor]);
+
   const addImage = useCallback(() => {
     const url = window.prompt('Enter image URL:');
     if (url && editor) {
-      editor.chain().focus().setImage({ src: url }).run();
+      editor.chain().focus().setImage({ 
+        src: url, 
+        alt: 'External image',
+        title: 'Click to resize'
+      }).run();
     }
   }, [editor]);
 
@@ -154,7 +219,11 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          editor.chain().focus().setImage({ src: e.target.result }).run();
+          editor.chain().focus().setImage({ 
+            src: e.target.result,
+            alt: file.name,
+            title: 'Click to resize'
+          }).run();
         };
         reader.readAsDataURL(file);
       }
@@ -321,6 +390,24 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
                 <Paperclip size={16} />
               </ToolbarButton>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Resize Controls */}
+      {selectedImage && (
+        <div className={`fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 p-4 rounded-xl border shadow-xl ${
+          isDarkMode 
+            ? 'bg-gray-800/95 border-gray-700/50 text-white' 
+            : 'bg-white/95 border-gray-200/50 text-gray-900'
+        }`}>
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium">Resize Image:</span>
+            <button onClick={() => resizeImage(200)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Small</button>
+            <button onClick={() => resizeImage(400)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Medium</button>
+            <button onClick={() => resizeImage(600)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Large</button>
+            <button onClick={() => resizeImage(800)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded">XL</button>
+            <button onClick={() => setSelectedImage(null)} className="px-2 py-1 text-xs bg-gray-500 text-white rounded">Close</button>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
-// Version 8 - Kanban column component with fixed drag and drop
+// Version 9 - Restricted task creation to backlog/planned, added delete for cancelled tasks
 
 import React, { useState } from 'react';
-import { Plus, EyeOff } from 'lucide-react';
+import { Plus, EyeOff, Trash2 } from 'lucide-react';
 import TaskCard from './TaskCard';
 
 const KanbanColumn = ({ 
@@ -15,6 +15,7 @@ const KanbanColumn = ({
   onCreateTask, 
   onOpenTask, 
   onToggleVisibility,
+  onDeleteTask,
   draggedTask 
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -41,6 +42,33 @@ const KanbanColumn = ({
     setIsDragOver(false);
     onDrop(e, column.id);
   };
+
+  const handleDeleteTask = async (taskId, e) => {
+    e.stopPropagation(); // Prevent opening task modal
+    
+    if (window.confirm('Are you sure you want to permanently delete this task? This action cannot be undone.')) {
+      try {
+        const response = await fetch(`http://localhost:3001/api/tasks/${taskId}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          onDeleteTask(taskId);
+        } else {
+          alert('Failed to delete task');
+        }
+      } catch (error) {
+        console.error('Error deleting task:', error);
+        alert('Failed to delete task');
+      }
+    }
+  };
+
+  // Only allow task creation in backlog and planned columns
+  const canCreateTasks = column.id === 'backlog' || column.id === 'planned';
+  
+  // Show delete button for cancelled tasks
+  const showDeleteButton = column.id === 'cancelled';
 
   if (isHidden) return null;
 
@@ -70,7 +98,7 @@ const KanbanColumn = ({
         style={{ borderRadius: '1rem 1rem 0 0' }}
       >
         <div className="flex justify-between items-center">
-          <h2 className="font-bold text-lg">{column.title}</h2>
+          <h2 className="font-bold text-lg column-header">{column.title}</h2>
           <div className="flex items-center space-x-3">
             <span className="bg-white/20 px-3 py-1 rounded-full text-sm font-medium">
               {column.count}
@@ -82,13 +110,15 @@ const KanbanColumn = ({
             >
               <EyeOff size={18} />
             </button>
-            <button
-              onClick={() => onCreateTask(column.id)}
-              className="hover:bg-white/20 p-2 rounded-lg transition-colors"
-              title="Add Task"
-            >
-              <Plus size={18} />
-            </button>
+            {canCreateTasks && (
+              <button
+                onClick={() => onCreateTask(column.id)}
+                className="hover:bg-white/20 p-2 rounded-lg transition-colors"
+                title="Add Task"
+              >
+                <Plus size={18} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -108,23 +138,44 @@ const KanbanColumn = ({
           }`}>
             <div className="mb-4 opacity-50">
               <div className="w-16 h-16 mx-auto rounded-full border-2 border-dashed border-current flex items-center justify-center">
-                <Plus size={24} />
+                {canCreateTasks ? <Plus size={24} /> : <div className="w-6 h-6 rounded bg-current"></div>}
               </div>
             </div>
             <p className="text-sm">No tasks yet</p>
-            <p className="text-xs mt-1">Drag tasks here or click + to add</p>
+            {canCreateTasks ? (
+              <p className="text-xs mt-1">Drag tasks here or click + to add</p>
+            ) : (
+              <p className="text-xs mt-1">Drag tasks here to update status</p>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
             {tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onDragStart={handleDragStart}
-                onOpenTask={onOpenTask}
-                isDarkMode={isDarkMode}
-                draggedTask={draggedTask}
-              />
+              <div key={task.id} className="relative group">
+                <TaskCard
+                  task={task}
+                  onDragStart={handleDragStart}
+                  onOpenTask={onOpenTask}
+                  isDarkMode={isDarkMode}
+                  draggedTask={draggedTask}
+                />
+                
+                {/* Delete Button for Cancelled Tasks */}
+                {showDeleteButton && (
+                  <button
+                    onClick={(e) => handleDeleteTask(task.id, e)}
+                    className={`absolute top-2 right-2 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 ${
+                      isDarkMode 
+                        ? 'bg-red-900/80 hover:bg-red-800 text-red-300 hover:text-red-200' 
+                        : 'bg-red-100/80 hover:bg-red-200 text-red-600 hover:text-red-700'
+                    }`}
+                    title="Permanently Delete Task"
+                    style={{ borderRadius: '0.5rem' }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
