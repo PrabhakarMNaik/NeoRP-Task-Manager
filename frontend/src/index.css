@@ -172,18 +172,20 @@ body {
 
 /* EXACT FONT SIZES AS REQUESTED - Enhanced */
 .editor-content .ProseMirror h1 {
-  font-size: 24px !important; /* EXACT 24px */
+  font-size: 26px !important; /* EXACT 24px */
   font-weight: 700 !important;
-  line-height: 1.2 !important;
-  margin: 1.5rem 0 1rem 0 !important;
+  line-height: 1.4 !important;
+  margin: 2rem 0 1rem 0 !important;
+  min-height: 36px !important;
   color: inherit !important;
 }
 
 .editor-content .ProseMirror h2 {
   font-size: 22px !important; /* EXACT 22px */
   font-weight: 600 !important;
-  line-height: 1.3 !important;
-  margin: 1.25rem 0 0.75rem 0 !important;
+  line-height: 1.4 !important;
+  margin: 1.5rem 0 0.75rem 0 !important;
+  min-height: 31px !important;
   color: inherit !important;
 }
 
@@ -191,7 +193,8 @@ body {
   font-size: 18px !important; /* EXACT 18px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  margin: 1rem 0 0.5rem 0 !important;
+  margin: 1.25rem 0 0.5rem 0 !important;
+  min-height: 25px !important;
   color: inherit !important;
 }
 
@@ -701,6 +704,7 @@ body {
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -708,6 +712,7 @@ body {
 .line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -834,14 +839,58 @@ input[type="range"]::-moz-range-thumb:hover {
   color: inherit;
 }
 
-.dark-mode .editor-content .ProseMirror {
+/* Make dark mode styles more specific and forceful */
+.dark-mode .editor-content .ProseMirror,
+.dark-mode .editor-content .ProseMirror[contenteditable="true"] {
+  color: #ffffff !important;
+  caret-color: #ffffff !important;
+}
+
+.dark-mode .editor-content .ProseMirror *,
+.dark-mode .editor-content .ProseMirror[contenteditable="true"] * {
   color: #ffffff !important;
 }
 
-.dark-mode .editor-content .ProseMirror p,
-.dark-mode .editor-content .ProseMirror li,
-.dark-mode .editor-content .ProseMirror h1,
-.dark-mode .editor-content .ProseMirror h2,
-.dark-mode .editor-content .ProseMirror h3 {
-  color: #ffffff !important;
+/* Dark mode specific styles */
+.dark-mode.editor-content {
+  color: white !important;
+}
+
+.dark-mode.editor-content p,
+.dark-mode.editor-content h1,
+.dark-mode.editor-content h2,
+.dark-mode.editor-content h3,
+.dark-mode.editor-content ul,
+.dark-mode.editor-content ol,
+.dark-mode.editor-content li,
+.dark-mode.editor-content blockquote {
+  color: white !important;
+}
+
+.dark-mode.editor-content .ProseMirror {
+  color: white !important;
+}
+
+/* Override Tailwind Typography (prose) styles in dark mode */
+.dark-mode.prose {
+  color: white !important;
+}
+
+.dark-mode.prose :where(p):not(:where([class~="not-prose"],[class~="not-prose"] *)) {
+  color: white !important;
+}
+
+.dark-mode.prose :where(h1, h2, h3, h4, h5, h6):not(:where([class~="not-prose"],[class~="not-prose"] *)) {
+  color: white !important;
+}
+
+/* Code blocks in dark mode */
+.dark-mode.prose pre {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+
+.dark-mode.prose code {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
 }

@@ -1,4 +1,4 @@
-// Version 9 - Fixed dark mode text visibility, rich text features, and added image resizing
+// Version 10 - Fixed all text editor issues with proper dark mode support
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -14,10 +14,11 @@ import {
 } from 'lucide-react';
 
 const BlockEditor = ({ value, onChange, isDarkMode }) => {
-  const [showToolbar, setShowToolbar] = useState(false);
+  const [showToolbar, setShowToolbar] = useState(true); // Always show toolbar
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const toolbarRef = useRef(null);
 
   // Memoize editor configuration to prevent unnecessary recreations
   const editorConfig = useMemo(() => ({
@@ -25,18 +26,33 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3],
+          HTMLAttributes: {
+            class: isDarkMode ? 'text-white' : 'text-gray-900',
+          }
+        },
+        paragraph: {
+          HTMLAttributes: {
+            class: `paragraph ${isDarkMode ? 'text-white' : 'text-gray-900'}`,
+          },
         },
         bulletList: {
           keepMarks: true,
           keepAttributes: false,
+          HTMLAttributes: {
+            class: 'bullet-list',
+          },
         },
         orderedList: {
           keepMarks: true,
           keepAttributes: false,
+          HTMLAttributes: {
+            class: 'ordered-list',
+          },
         },
         listItem: {
-          keepMarks: true,
-          keepAttributes: false,
+          HTMLAttributes: {
+            class: 'list-item',
+          },
         },
       }),
       Image.configure({
@@ -72,7 +88,7 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     editorProps: {
       attributes: {
         class: `prose prose-lg max-w-none focus:outline-none min-h-[400px] px-6 py-4 editor-content ${
-          isDarkMode ? 'dark-mode' : 'light-mode'
+          isDarkMode ? 'dark-mode prose-invert' : 'light-mode'
         }`,
       },
       handlePaste: (view, event, slice) => {
@@ -159,16 +175,6 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
-    onFocus: () => {
-      setShowToolbar(true);
-    },
-    onBlur: () => {
-      setTimeout(() => {
-        if (editorRef.current && !editorRef.current.contains(document.activeElement)) {
-          setShowToolbar(false);
-        }
-      }, 200);
-    },
   }), [value, onChange, isDarkMode]);
 
   const editor = useEditor(editorConfig);
@@ -198,7 +204,8 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     }
   }, [selectedImage, editor]);
 
-  const addImage = useCallback(() => {
+  const addImage = useCallback((e) => {
+    e.preventDefault();
     const url = window.prompt('Enter image URL:');
     if (url && editor) {
       editor.chain().focus().setImage({ 
@@ -209,7 +216,8 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     }
   }, [editor]);
 
-  const addAttachment = useCallback(() => {
+  const addAttachment = useCallback((e) => {
+    e.preventDefault();
     fileInputRef.current?.click();
   }, []);
 
@@ -242,8 +250,12 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
 
   const ToolbarButton = ({ onClick, isActive, children, title }) => (
     <button
-      onClick={onClick}
+      onMouseDown={(e) => {
+        e.preventDefault(); // Prevent focus loss
+        onClick();
+      }}
       title={title}
+      type="button"
       className={`p-2 rounded-lg transition-all duration-200 ${
         isActive 
           ? (isDarkMode 
@@ -263,136 +275,134 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
   return (
     <div 
       ref={editorRef}
-      className={`block-editor relative ${isDarkMode ? 'dark' : ''}`}
+      className={`block-editor relative ${isDarkMode ? 'dark' : 'light'}`}
     >
       {/* Floating Toolbar */}
-      {showToolbar && (
-        <div className={`sticky top-0 z-10 p-4 border-b backdrop-blur-sm transition-all duration-300 ${
-          isDarkMode 
-            ? 'bg-gray-800/90 border-gray-600/30' 
-            : 'bg-white/90 border-gray-200/30'
-        }`}>
-          <div className="flex flex-wrap items-center gap-1">
-            {/* Text Formatting */}
-            <div className="flex items-center space-x-1 mr-4">
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                isActive={editor.isActive('bold')}
-                title="Bold (Ctrl+B)"
-              >
-                <Bold size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                isActive={editor.isActive('italic')}
-                title="Italic (Ctrl+I)"
-              >
-                <Italic size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleStrike().run()}
-                isActive={editor.isActive('strike')}
-                title="Strikethrough"
-              >
-                <Strikethrough size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleCode().run()}
-                isActive={editor.isActive('code')}
-                title="Inline Code"
-              >
-                <Code size={16} />
-              </ToolbarButton>
-            </div>
+      <div className={`sticky top-0 z-10 p-4 border-b backdrop-blur-sm transition-all duration-300 ${
+        isDarkMode 
+          ? 'bg-gray-800/90 border-gray-600/30' 
+          : 'bg-white/90 border-gray-200/30'
+      }`} ref={toolbarRef}>
+        <div className="flex flex-wrap items-center gap-1">
+          {/* Text Formatting */}
+          <div className="flex items-center space-x-1 mr-4">
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              isActive={editor.isActive('bold')}
+              title="Bold (Ctrl+B)"
+            >
+              <Bold size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              isActive={editor.isActive('italic')}
+              title="Italic (Ctrl+I)"
+            >
+              <Italic size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              isActive={editor.isActive('strike')}
+              title="Strikethrough"
+            >
+              <Strikethrough size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              isActive={editor.isActive('code')}
+              title="Inline Code"
+            >
+              <Code size={16} />
+            </ToolbarButton>
+          </div>
 
-            {/* Headings */}
-            <div className="flex items-center space-x-1 mr-4">
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                isActive={editor.isActive('heading', { level: 1 })}
-                title="Heading 1"
-              >
-                <Heading1 size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                isActive={editor.isActive('heading', { level: 2 })}
-                title="Heading 2"
-              >
-                <Heading2 size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                isActive={editor.isActive('heading', { level: 3 })}
-                title="Heading 3"
-              >
-                <Heading3 size={16} />
-              </ToolbarButton>
-            </div>
+          {/* Headings */}
+          <div className="flex items-center space-x-1 mr-4">
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              isActive={editor.isActive('heading', { level: 1 })}
+              title="Heading 1"
+            >
+              <Heading1 size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              isActive={editor.isActive('heading', { level: 2 })}
+              title="Heading 2"
+            >
+              <Heading2 size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              isActive={editor.isActive('heading', { level: 3 })}
+              title="Heading 3"
+            >
+              <Heading3 size={16} />
+            </ToolbarButton>
+          </div>
 
-            {/* Lists */}
-            <div className="flex items-center space-x-1 mr-4">
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleBulletList().run()}
-                isActive={editor.isActive('bulletList')}
-                title="Bullet List"
-              >
-                <List size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                isActive={editor.isActive('orderedList')}
-                title="Numbered List"
-              >
-                <ListOrdered size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleTaskList().run()}
-                isActive={editor.isActive('taskList')}
-                title="Task List"
-              >
-                <CheckSquare size={16} />
-              </ToolbarButton>
-            </div>
+          {/* Lists */}
+          <div className="flex items-center space-x-1 mr-4">
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              isActive={editor.isActive('bulletList')}
+              title="Bullet List"
+            >
+              <List size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              isActive={editor.isActive('orderedList')}
+              title="Numbered List"
+            >
+              <ListOrdered size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleTaskList().run()}
+              isActive={editor.isActive('taskList')}
+              title="Task List"
+            >
+              <CheckSquare size={16} />
+            </ToolbarButton>
+          </div>
 
-            {/* Other Elements */}
-            <div className="flex items-center space-x-1">
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                isActive={editor.isActive('blockquote')}
-                title="Quote"
-              >
-                <Quote size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                isActive={editor.isActive('codeBlock')}
-                title="Code Block"
-              >
-                <Code size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().setHorizontalRule().run()}
-                title="Horizontal Rule"
-              >
-                <Minus size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={addImage}
-                title="Add Image URL"
-              >
-                <ImageIcon size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={addAttachment}
-                title="Upload Image"
-              >
-                <Paperclip size={16} />
-              </ToolbarButton>
-            </div>
+          {/* Other Elements */}
+          <div className="flex items-center space-x-1">
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              isActive={editor.isActive('blockquote')}
+              title="Quote"
+            >
+              <Quote size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+              isActive={editor.isActive('codeBlock')}
+              title="Code Block"
+            >
+              <Code size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().setHorizontalRule().run()}
+              title="Horizontal Rule"
+            >
+              <Minus size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={addImage}
+              title="Add Image URL"
+            >
+              <ImageIcon size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={addAttachment}
+              title="Upload Image"
+            >
+              <Paperclip size={16} />
+            </ToolbarButton>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Image Resize Controls */}
       {selectedImage && (
@@ -425,17 +435,6 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
       <div className="editor-wrapper">
         <EditorContent editor={editor} />
       </div>
-
-      {/* Quick Help */}
-      {!showToolbar && (
-        <div className={`absolute bottom-4 right-4 text-xs px-3 py-2 rounded-lg ${
-          isDarkMode 
-            ? 'bg-gray-700/80 text-gray-400' 
-            : 'bg-gray-100/80 text-gray-600'
-        }`}>
-          Click to start editing
-        </div>
-      )}
     </div>
   );
 };
