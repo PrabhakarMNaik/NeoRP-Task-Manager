@@ -23,12 +23,17 @@ const LinkModal = ({ isOpen, onClose, selectedTask, allTasks, onUpdate, isDarkMo
       });
       
       if (response.ok) {
-        onUpdate();
+        await onUpdate(); // Ensure proper refresh
         onClose();
         setSearchTerm('');
+      } else {
+        const errorData = await response.json();
+        console.error('Link error:', errorData);
+        alert(errorData.error || 'Failed to link tasks');
       }
     } catch (error) {
       console.error('Error linking tasks:', error);
+      alert('Failed to link tasks');
     }
   };
 

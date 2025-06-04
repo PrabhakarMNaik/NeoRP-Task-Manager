@@ -1,6 +1,6 @@
-// Version 8 - Rich text editor with toolbar and proper text visibility
+// Version 8 - Optimized rich text editor with fixed functionality
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -10,35 +10,58 @@ import TaskItem from '@tiptap/extension-task-item';
 import { 
   Bold, Italic, Code, List, ListOrdered, Quote, 
   Heading1, Heading2, Heading3, Minus, 
-  CheckSquare, Image as ImageIcon,
-  Underline, Strikethrough
+  CheckSquare, Image as ImageIcon, Paperclip, Strikethrough
 } from 'lucide-react';
 
 const BlockEditor = ({ value, onChange, isDarkMode }) => {
   const [showToolbar, setShowToolbar] = useState(false);
   const editorRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  const editor = useEditor({
+  // Memoize editor configuration to prevent unnecessary recreations
+  const editorConfig = useMemo(() => ({
     extensions: [
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3],
         },
+        bulletList: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
+        orderedList: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
+        listItem: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
       }),
       Image.configure({
-        inline: true,
+        inline: false,
         allowBase64: true,
+        HTMLAttributes: {
+          class: 'editor-image',
+        },
       }),
-      TaskList,
+      TaskList.configure({
+        HTMLAttributes: {
+          class: 'task-list',
+        },
+      }),
       TaskItem.configure({
         nested: true,
+        HTMLAttributes: {
+          class: 'task-item',
+        },
       }),
       Placeholder.configure({
         placeholder: ({ node }) => {
           if (node.type.name === 'heading') {
             return `Heading ${node.attrs.level}`;
           }
-          return "Start typing... Use '/' for quick commands";
+          return "Start typing... Use toolbar for formatting";
         },
         showOnlyWhenEditable: true,
         includeChildren: true,
@@ -47,33 +70,54 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     content: value || '<p></p>',
     editorProps: {
       attributes: {
-        class: `prose prose-lg max-w-none focus:outline-none min-h-[400px] px-6 py-4 ${
-          isDarkMode 
-            ? 'prose-invert text-white caret-white' 
-            : 'prose-gray text-gray-900 caret-gray-900'
+        class: `prose prose-lg max-w-none focus:outline-none min-h-[400px] px-6 py-4 editor-content ${
+          isDarkMode ? 'dark-mode' : 'light-mode'
         }`,
-        style: isDarkMode 
-          ? 'color: #fff; caret-color: #fff;' 
-          : 'color: #1f2937; caret-color: #1f2937;'
       },
-      handleKeyDown: (view, event) => {
-        // Show toolbar on focus
-        if (!showToolbar) {
-          setShowToolbar(true);
-        }
-
-        // Handle slash commands
-        if (event.key === '/') {
-          const { state } = view;
-          const { selection } = state;
-          const { $from } = selection;
-          
-          const textBefore = $from.parent.textContent.slice(0, $from.parentOffset);
-          if (textBefore === '' || textBefore.endsWith(' ')) {
-            // Could implement slash command menu here
-            return false;
+      handlePaste: (view, event, slice) => {
+        // Handle image paste from clipboard
+        const items = Array.from(event.clipboardData?.items || []);
+        const imageItem = items.find(item => item.type.startsWith('image/'));
+        
+        if (imageItem) {
+          event.preventDefault();
+          const file = imageItem.getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              view.dispatch(
+                view.state.tr.replaceSelectionWith(
+                  view.state.schema.nodes.image.create({ src: e.target.result })
+                )
+              );
+            };
+            reader.readAsDataURL(file);
+            return true;
           }
         }
+        return false;
+      },
+      handleDrop: (view, event, slice, moved) => {
+        // Handle image drop
+        const files = Array.from(event.dataTransfer?.files || []);
+        const imageFile = files.find(file => file.type.startsWith('image/'));
+        
+        if (imageFile) {
+          event.preventDefault();
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const { state } = view;
+            const { tr } = state;
+            const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            if (pos) {
+              tr.insert(pos.pos, state.schema.nodes.image.create({ src: e.target.result }));
+              view.dispatch(tr);
+            }
+          };
+          reader.readAsDataURL(imageFile);
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => {
@@ -83,20 +127,40 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
       setShowToolbar(true);
     },
     onBlur: () => {
-      // Keep toolbar visible for a short time
       setTimeout(() => {
         if (editorRef.current && !editorRef.current.contains(document.activeElement)) {
           setShowToolbar(false);
         }
       }, 200);
     },
-  });
+  }), [value, onChange, isDarkMode]);
+
+  const editor = useEditor(editorConfig);
 
   const addImage = useCallback(() => {
     const url = window.prompt('Enter image URL:');
     if (url && editor) {
       editor.chain().focus().setImage({ src: url }).run();
     }
+  }, [editor]);
+
+  const addAttachment = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelect = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (file && editor) {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          editor.chain().focus().setImage({ src: e.target.result }).run();
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    // Reset input
+    event.target.value = '';
   }, [editor]);
 
   if (!editor) {
@@ -246,24 +310,33 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
               </ToolbarButton>
               <ToolbarButton
                 onClick={addImage}
-                title="Add Image"
+                title="Add Image URL"
               >
                 <ImageIcon size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={addAttachment}
+                title="Upload Image"
+              >
+                <Paperclip size={16} />
               </ToolbarButton>
             </div>
           </div>
         </div>
       )}
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
       {/* Editor Content */}
-      <div className={`editor-content ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
-        <EditorContent 
-          editor={editor} 
-          style={{
-            color: isDarkMode ? '#ffffff' : '#1f2937',
-            caretColor: isDarkMode ? '#ffffff' : '#1f2937'
-          }}
-        />
+      <div className="editor-wrapper">
+        <EditorContent editor={editor} />
       </div>
 
       {/* Quick Help */}
@@ -276,115 +349,6 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
           Click to start editing
         </div>
       )}
-
-      <style jsx>{`
-        .editor-content .ProseMirror {
-          outline: none;
-        }
-        
-        .dark-mode .ProseMirror {
-          color: #ffffff !important;
-          caret-color: #ffffff !important;
-        }
-        
-        .light-mode .ProseMirror {
-          color: #1f2937 !important;
-          caret-color: #1f2937 !important;
-        }
-        
-        .dark-mode .ProseMirror h1,
-        .dark-mode .ProseMirror h2,
-        .dark-mode .ProseMirror h3,
-        .dark-mode .ProseMirror h4,
-        .dark-mode .ProseMirror h5,
-        .dark-mode .ProseMirror h6 {
-          color: #ffffff !important;
-        }
-        
-        .light-mode .ProseMirror h1,
-        .light-mode .ProseMirror h2,
-        .light-mode .ProseMirror h3,
-        .light-mode .ProseMirror h4,
-        .light-mode .ProseMirror h5,
-        .light-mode .ProseMirror h6 {
-          color: #1f2937 !important;
-        }
-        
-        .dark-mode .ProseMirror p,
-        .dark-mode .ProseMirror li,
-        .dark-mode .ProseMirror blockquote {
-          color: #e5e7eb !important;
-        }
-        
-        .light-mode .ProseMirror p,
-        .light-mode .ProseMirror li,
-        .light-mode .ProseMirror blockquote {
-          color: #374151 !important;
-        }
-        
-        .dark-mode .ProseMirror code {
-          background: rgba(139, 92, 246, 0.2) !important;
-          color: #a78bfa !important;
-          border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-        
-        .light-mode .ProseMirror code {
-          background: rgba(139, 92, 246, 0.1) !important;
-          color: #7c3aed !important;
-          border: 1px solid rgba(139, 92, 246, 0.2);
-        }
-        
-        .dark-mode .ProseMirror pre {
-          background: #1a1a1a !important;
-          color: #10b981 !important;
-          border-left: 4px solid #10b981;
-        }
-        
-        .light-mode .ProseMirror pre {
-          background: #f3f4f6 !important;
-          color: #059669 !important;
-          border-left: 4px solid #059669;
-        }
-        
-        .dark-mode .ProseMirror blockquote {
-          border-left: 4px solid #3b82f6;
-          background: rgba(59, 130, 246, 0.1) !important;
-          color: #e5e7eb !important;
-        }
-        
-        .light-mode .ProseMirror blockquote {
-          border-left: 4px solid #3b82f6;
-          background: rgba(59, 130, 246, 0.05) !important;
-          color: #374151 !important;
-        }
-        
-        .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
-          text-decoration: line-through;
-          opacity: 0.6;
-        }
-        
-        .ProseMirror ul[data-type="taskList"] li > label {
-          margin-right: 0.5rem;
-        }
-        
-        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
-          width: 1rem;
-          height: 1rem;
-          border-radius: 0.25rem;
-          border: 2px solid #d1d5db;
-          margin: 0;
-        }
-        
-        .dark-mode .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
-          border-color: #6b7280;
-          background: transparent;
-        }
-        
-        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
-          background: #3b82f6;
-          border-color: #3b82f6;
-        }
-      `}</style>
     </div>
   );
 };

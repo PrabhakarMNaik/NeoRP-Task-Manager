@@ -1,6 +1,6 @@
-// Version 8 - Fixed persistence, timer, and UI issues
+// Version 8 - Performance optimized main component
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Sun, Moon, Eye, EyeOff, Settings } from 'lucide-react';
 import TaskModal from './TaskModal';
 import KanbanColumn from './KanbanColumn';
@@ -34,12 +34,20 @@ const ProjectPlanningModule = () => {
     longBreak: 15 * 60
   });
 
+  // Memoize columns with task counts to prevent unnecessary re-renders
+  const columnsWithCounts = useMemo(() => 
+    COLUMNS.map(column => ({
+      ...column,
+      count: tasks[column.id]?.length || 0
+    })), [tasks]
+  );
+
   // Load tasks on component mount
   useEffect(() => {
     loadAllTasks();
   }, []);
 
-  const loadAllTasks = async () => {
+  const loadAllTasks = useCallback(async () => {
     try {
       const data = await loadTasks();
       
@@ -60,10 +68,11 @@ const ProjectPlanningModule = () => {
       
       setTasks(groupedTasks);
       setAllTasks(data);
+      TimerManager.loadTimeFromBackend(data);
     } catch (error) {
       console.error('Error loading tasks:', error);
     }
-  };
+  }, []);
 
   const handleDragStart = (e, task, fromColumn) => {
     setDraggedTask(task);
@@ -200,7 +209,7 @@ const ProjectPlanningModule = () => {
       {/* Kanban Board */}
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-          {COLUMNS.map((column) => (
+          {columnsWithCounts.map((column) => (
             <KanbanColumn
               key={column.id}
               column={column}
@@ -229,7 +238,7 @@ const ProjectPlanningModule = () => {
               Hidden Columns:
             </h3>
             <div className="flex flex-wrap gap-3">
-              {COLUMNS.filter(col => hiddenColumns[col.id]).map(column => (
+              {columnsWithCounts.filter(col => hiddenColumns[col.id]).map(column => (
                 <button
                   key={column.id}
                   onClick={() => toggleColumnVisibility(column.id)}

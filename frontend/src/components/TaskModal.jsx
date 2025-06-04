@@ -36,7 +36,7 @@ const TaskModal = ({
     setSelectedTask(task);
   }, [task]);
 
-  // Debounced save function
+  // Optimized save function - reduced debounce time
   const saveTask = useCallback(
     debounce(async (taskToSave) => {
       try {
@@ -48,13 +48,12 @@ const TaskModal = ({
         
         if (response.ok) {
           await TimerManager.saveTimeToBackend(taskToSave.id);
-          onUpdate();
         }
       } catch (error) {
         console.error('Error saving task:', error);
       }
-    }, 1000),
-    [onUpdate]
+    }, 300),
+    []
   );
 
   // Update task and save
