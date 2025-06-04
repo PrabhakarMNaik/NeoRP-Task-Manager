@@ -2,6 +2,59 @@ const pool = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 
 class Task {
+  // Helper method to format date properly
+  static formatDateForFrontend(date) {
+    if (!date) return null;
+    
+    // If it's already a string in YYYY-MM-DD format, return as-is
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+    
+    // If it's a Date object, convert to YYYY-MM-DD format in local time
+    if (date instanceof Date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // Try to parse as date and format
+    try {
+      const parsedDate = new Date(date);
+      if (!isNaN(parsedDate.getTime())) {
+        // Use UTC methods to avoid timezone issues
+        const year = parsedDate.getUTCFullYear();
+        const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(parsedDate.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    } catch (error) {
+      console.warn('Error parsing date:', date, error);
+    }
+    
+    return null;
+  }
+
+  // Helper method to format task data
+  static formatTaskData(row) {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      assignee: row.assignee,
+      priority: row.priority,
+      dueDate: this.formatDateForFrontend(row.due_date), // FIX: Proper date formatting
+      status: row.status,
+      files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
+      allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
+      timeSpent: parseInt(row.time_spent) || 0,
+      linkedTasks: row.linked_tasks || [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
   // Get all tasks with their linked tasks
   static async findAll() {
     const query = `
@@ -19,21 +72,7 @@ class Task {
     
     try {
       const result = await pool.query(query);
-      return result.rows.map(row => ({
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        assignee: row.assignee,
-        priority: row.priority,
-        dueDate: row.due_date,
-        status: row.status,
-        files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
-        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
-        timeSpent: parseInt(row.time_spent) || 0,
-        linkedTasks: row.linked_tasks || [],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      }));
+      return result.rows.map(row => this.formatTaskData(row));
     } catch (error) {
       console.error('Error in findAll:', error);
       throw error;
@@ -59,22 +98,7 @@ class Task {
       const result = await pool.query(query, [id]);
       if (result.rows.length === 0) return null;
       
-      const row = result.rows[0];
-      return {
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        assignee: row.assignee,
-        priority: row.priority,
-        dueDate: row.due_date,
-        status: row.status,
-        files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
-        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
-        timeSpent: parseInt(row.time_spent) || 0,
-        linkedTasks: row.linked_tasks || [],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      };
+      return this.formatTaskData(result.rows[0]);
     } catch (error) {
       console.error('Error in findById:', error);
       throw error;
@@ -117,13 +141,18 @@ class Task {
       RETURNING *
     `;
     
+    // FIX: Ensure due date is properly formatted or null
+    const dueDate = taskData.dueDate && taskData.dueDate.trim() !== '' 
+      ? taskData.dueDate 
+      : null;
+    
     const values = [
       id,
       taskData.title || 'New Task',
       taskData.description || '# New Task\n\nTask description here...',
       taskData.assignee || '',
       taskData.priority || 'medium',
-      taskData.dueDate || null,
+      dueDate, // FIX: Use properly formatted date
       taskData.status || 'backlog',
       JSON.stringify(taskData.files || []),
       JSON.stringify(taskData.allowedApps || []),
@@ -133,22 +162,7 @@ class Task {
     
     try {
       const result = await pool.query(query, values);
-      const row = result.rows[0];
-      return {
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        assignee: row.assignee,
-        priority: row.priority,
-        dueDate: row.due_date,
-        status: row.status,
-        files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
-        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
-        timeSpent: parseInt(row.time_spent) || 0,
-        linkedTasks: [],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      };
+      return this.formatTaskData(result.rows[0]);
     } catch (error) {
       console.error('Error in create:', error);
       throw error;
@@ -166,12 +180,17 @@ class Task {
       RETURNING *
     `;
     
+    // FIX: Ensure due date is properly formatted or null
+    const dueDate = taskData.dueDate && taskData.dueDate.trim() !== '' 
+      ? taskData.dueDate 
+      : null;
+    
     const values = [
       taskData.title,
       taskData.description,
       taskData.assignee,
       taskData.priority,
-      taskData.dueDate || null,
+      dueDate, // FIX: Use properly formatted date
       taskData.status,
       JSON.stringify(taskData.files || []),
       JSON.stringify(taskData.allowedApps || []),
@@ -184,21 +203,7 @@ class Task {
       const result = await pool.query(query, values);
       if (result.rows.length === 0) return null;
       
-      const row = result.rows[0];
-      return {
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        assignee: row.assignee,
-        priority: row.priority,
-        dueDate: row.due_date,
-        status: row.status,
-        files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
-        allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
-        timeSpent: parseInt(row.time_spent) || 0,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      };
+      return this.formatTaskData(result.rows[0]);
     } catch (error) {
       console.error('Error in update:', error);
       throw error;

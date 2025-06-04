@@ -22,6 +22,40 @@ const validateTaskInput = (req, res, next) => {
   next();
 };
 
+// Helper function to format date for frontend (same as in Task model)
+const formatDateForFrontend = (date) => {
+  if (!date) return null;
+  
+  // If it's already a string in YYYY-MM-DD format, return as-is
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  
+  // If it's a Date object, convert to YYYY-MM-DD format in local time
+  if (date instanceof Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Try to parse as date and format
+  try {
+    const parsedDate = new Date(date);
+    if (!isNaN(parsedDate.getTime())) {
+      // Use UTC methods to avoid timezone issues
+      const year = parsedDate.getUTCFullYear();
+      const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(parsedDate.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (error) {
+    console.warn('Error parsing date:', date, error);
+  }
+  
+  return null;
+};
+
 // GET /api/tasks - Get all tasks
 router.get('/', async (req, res) => {
   try {
@@ -31,6 +65,61 @@ router.get('/', async (req, res) => {
     console.error('Error fetching tasks:', error);
     res.status(500).json({ 
       error: 'Failed to fetch tasks', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
+  }
+});
+
+// GET /api/tasks/active - Get currently active task (for app monitor)
+// IMPORTANT: This route must come BEFORE /:id route to avoid conflicts
+router.get('/active', async (req, res) => {
+  try {
+    // For now, return the most recently updated task that's in 'in-progress' status
+    // In a full implementation, this would track which task is currently open
+    const pool = require('../config/database');
+    const query = `
+      SELECT 
+        t.*,
+        COALESCE(
+          json_agg(tl.linked_task_id) FILTER (WHERE tl.linked_task_id IS NOT NULL), 
+          '[]'::json
+        ) as linked_tasks
+      FROM tasks t
+      LEFT JOIN task_links tl ON t.id = tl.task_id
+      WHERE t.status = 'in-progress'
+      GROUP BY t.id, t.title, t.description, t.assignee, t.priority, t.due_date, t.status, t.files, t.allowed_apps, t.time_spent, t.created_at, t.updated_at
+      ORDER BY t.updated_at DESC
+      LIMIT 1
+    `;
+    
+    const result = await pool.query(query);
+    
+    if (result.rows.length === 0) {
+      return res.json(null);
+    }
+    
+    const row = result.rows[0];
+    const task = {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      assignee: row.assignee,
+      priority: row.priority,
+      dueDate: formatDateForFrontend(row.due_date), // FIX: Proper date formatting
+      status: row.status,
+      files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
+      allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
+      timeSpent: parseInt(row.time_spent) || 0,
+      linkedTasks: row.linked_tasks || [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+    
+    res.json(task);
+  } catch (error) {
+    console.error('Error fetching active task:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch active task',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined 
     });
   }
@@ -181,60 +270,6 @@ router.post('/:id/unlink', async (req, res) => {
     console.error('Error unlinking tasks:', error);
     res.status(500).json({ 
       error: 'Failed to unlink tasks',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
-    });
-  }
-});
-
-// GET /api/tasks/active - Get currently active task (for app monitor)
-router.get('/active', async (req, res) => {
-  try {
-    // For now, return the most recently updated task that's in 'in-progress' status
-    // In a full implementation, this would track which task is currently open
-    const pool = require('../config/database');
-    const query = `
-      SELECT 
-        t.*,
-        COALESCE(
-          json_agg(tl.linked_task_id) FILTER (WHERE tl.linked_task_id IS NOT NULL), 
-          '[]'::json
-        ) as linked_tasks
-      FROM tasks t
-      LEFT JOIN task_links tl ON t.id = tl.task_id
-      WHERE t.status = 'in-progress'
-      GROUP BY t.id, t.title, t.description, t.assignee, t.priority, t.due_date, t.status, t.files, t.allowed_apps, t.time_spent, t.created_at, t.updated_at
-      ORDER BY t.updated_at DESC
-      LIMIT 1
-    `;
-    
-    const result = await pool.query(query);
-    
-    if (result.rows.length === 0) {
-      return res.json(null);
-    }
-    
-    const row = result.rows[0];
-    const task = {
-      id: row.id,
-      title: row.title,
-      description: row.description,
-      assignee: row.assignee,
-      priority: row.priority,
-      dueDate: row.due_date,
-      status: row.status,
-      files: typeof row.files === 'string' ? JSON.parse(row.files) : row.files || [],
-      allowedApps: typeof row.allowed_apps === 'string' ? JSON.parse(row.allowed_apps) : row.allowed_apps || [],
-      timeSpent: parseInt(row.time_spent) || 0,
-      linkedTasks: row.linked_tasks || [],
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    };
-    
-    res.json(task);
-  } catch (error) {
-    console.error('Error fetching active task:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch active task',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined 
     });
   }
