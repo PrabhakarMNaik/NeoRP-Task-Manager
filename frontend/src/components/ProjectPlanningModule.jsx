@@ -1,4 +1,4 @@
-// Version 9 - Performance optimized main component with restricted task creation
+// Version 10 - Complete ProjectPlanningModule with all dark mode fixes
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Sun, Moon, Eye, EyeOff, Settings } from 'lucide-react';
@@ -33,6 +33,44 @@ const ProjectPlanningModule = () => {
     shortBreak: 5 * 60,
     longBreak: 15 * 60
   });
+
+  // CRITICAL FIX 1: Apply classes to document root
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    
+    // Clear all theme classes first
+    root.classList.remove('dark', 'light');
+    body.classList.remove('dark-mode', 'light-mode');
+    
+    if (isDarkMode) {
+      root.classList.add('dark');
+      body.classList.add('dark-mode');
+      console.log('🌙 Applied dark classes to document');
+    } else {
+      root.classList.add('light');
+      body.classList.add('light-mode');
+      console.log('☀️ Applied light classes to document');
+    }
+    
+    // Force update all editors
+    const editors = document.querySelectorAll('.tiptap-editor-content');
+    editors.forEach(editor => {
+      editor.classList.remove('dark-mode', 'light-mode');
+      editor.classList.add(isDarkMode ? 'dark-mode' : 'light-mode');
+    });
+    
+    // Debug verification
+    setTimeout(() => {
+      console.log('🔍 After class update:', {
+        html: root.className,
+        body: body.className,
+        isDarkMode,
+        editorClasses: document.querySelector('.tiptap-editor-content')?.className
+      });
+    }, 100);
+    
+  }, [isDarkMode]);
 
   // Memoize columns with task counts to prevent unnecessary re-renders
   const columnsWithCounts = useMemo(() => 
@@ -211,15 +249,25 @@ const ProjectPlanningModule = () => {
     setIsLinkModalOpen(false);
   }, []);
 
+  // Enhanced toggle function with debugging
+  const toggleDarkMode = () => {
+    console.log('🔄 Toggling dark mode from', isDarkMode, 'to', !isDarkMode);
+    setIsDarkMode(prev => !prev);
+  };
+
   return (
+    // CRITICAL: Add dark mode class to main container
     <div className={`min-h-screen transition-colors duration-300 ${
-      isDarkMode ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
+      isDarkMode 
+        ? 'dark dark-mode bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' 
+        : 'light light-mode bg-gradient-to-br from-gray-50 via-white to-gray-100'
     }`}>
-      {/* Enhanced Header */}
+      
+      {/* Enhanced Header with explicit dark mode classes */}
       <div className={`p-6 m-6 rounded-2xl border shadow-xl ${
         isDarkMode 
-          ? 'bg-gray-800/70 border-gray-700/50 backdrop-blur-xl' 
-          : 'bg-white/80 border-gray-200/50 backdrop-blur-xl'
+          ? 'dark-mode bg-gray-800/70 border-gray-700/50 backdrop-blur-xl' 
+          : 'light-mode bg-white/80 border-gray-200/50 backdrop-blur-xl'
       }`} style={{
         backdropFilter: 'blur(20px)',
         boxShadow: isDarkMode
@@ -229,12 +277,27 @@ const ProjectPlanningModule = () => {
       }}>
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <h1 className={`text-3xl font-bold ${
+              isDarkMode 
+                ? 'text-white' 
+                : 'text-gray-900'
+            }`}>
               NeoRP Project Planning
             </h1>
           </div>
           
           <div className="flex items-center space-x-3">
+            {/* Debug indicator - remove in production */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className={`px-2 py-1 rounded text-xs font-mono border ${
+                isDarkMode 
+                  ? 'bg-red-900 text-red-200 border-red-700' 
+                  : 'bg-red-100 text-red-800 border-red-300'
+              }`}>
+                {isDarkMode ? 'DARK' : 'LIGHT'}
+              </div>
+            )}
+            
             <button
               onClick={() => setIsSettingsModalOpen(true)}
               className={`btn-3d p-4 rounded-2xl transition-all duration-300 ${
@@ -246,8 +309,9 @@ const ProjectPlanningModule = () => {
             >
               <Settings size={24} />
             </button>
+            
             <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
+              onClick={toggleDarkMode}
               className={`btn-3d p-4 rounded-2xl transition-all duration-300 ${
                 isDarkMode 
                   ? 'bg-yellow-500 hover:bg-yellow-400 text-gray-900 shadow-yellow-500/25' 
@@ -261,7 +325,7 @@ const ProjectPlanningModule = () => {
         </div>
       </div>
 
-      {/* Kanban Board */}
+      {/* Kanban Board with explicit dark mode propagation */}
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           {columnsWithCounts.map((column) => (
@@ -270,7 +334,7 @@ const ProjectPlanningModule = () => {
               column={column}
               tasks={tasks[column.id] || []}
               isHidden={hiddenColumns[column.id]}
-              isDarkMode={isDarkMode}
+              isDarkMode={isDarkMode} // CRITICAL: Pass down explicitly
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
@@ -287,10 +351,12 @@ const ProjectPlanningModule = () => {
         {Object.keys(hiddenColumns).some(key => hiddenColumns[key]) && (
           <div className={`mt-6 p-6 rounded-2xl border shadow-xl ${
             isDarkMode 
-              ? 'bg-gray-800/70 border-gray-700/50 backdrop-blur-xl' 
-              : 'bg-white/80 border-gray-200/50 backdrop-blur-xl'
+              ? 'dark-mode bg-gray-800/70 border-gray-700/50 backdrop-blur-xl' 
+              : 'light-mode bg-white/80 border-gray-200/50 backdrop-blur-xl'
           }`} style={{ borderRadius: '1rem' }}>
-            <h3 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            <h3 className={`text-lg font-semibold mb-4 ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>
               Hidden Columns:
             </h3>
             <div className="flex flex-wrap gap-3">
@@ -310,21 +376,20 @@ const ProjectPlanningModule = () => {
         )}
       </div>
 
-      {/* Task Detail Modal */}
+      {/* All modals with explicit dark mode classes */}
       {isModalOpen && selectedTask && (
         <TaskModal
           task={selectedTask}
           isOpen={isModalOpen}
           onClose={closeTask}
           onUpdate={loadAllTasks}
-          isDarkMode={isDarkMode}
+          isDarkMode={isDarkMode} // CRITICAL: Pass down explicitly
           allTasks={allTasks}
           onOpenLinkModal={handleOpenLinkModal}
           pomodoroSettings={pomodoroSettings}
         />
       )}
 
-      {/* Link Modal */}
       {isLinkModalOpen && selectedTask && (
         <LinkModal
           isOpen={isLinkModalOpen}
@@ -333,18 +398,17 @@ const ProjectPlanningModule = () => {
           allTasks={allTasks}
           onUpdate={loadAllTasks}
           onTaskUpdate={handleTaskUpdate}
-          isDarkMode={isDarkMode}
+          isDarkMode={isDarkMode} // CRITICAL: Pass down explicitly
         />
       )}
 
-      {/* Settings Modal */}
       {isSettingsModalOpen && (
         <SettingsModal
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
           pomodoroSettings={pomodoroSettings}
           onUpdateSettings={setPomodoroSettings}
-          isDarkMode={isDarkMode}
+          isDarkMode={isDarkMode} // CRITICAL: Pass down explicitly
         />
       )}
     </div>

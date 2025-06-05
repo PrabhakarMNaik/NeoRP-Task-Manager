@@ -1,4 +1,4 @@
-// Version 11 - Complete BlockEditor rewrite with all fixes
+// Version 13 - Complete BlockEditor with all fixes
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -8,12 +8,143 @@ import Image from '@tiptap/extension-image';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import CodeBlock from '@tiptap/extension-code-block';
+import { Node } from '@tiptap/core';
 import { 
   Bold, Italic, Code, List, ListOrdered, Quote, 
   Heading1, Heading2, Heading3, Minus, 
   CheckSquare, Image as ImageIcon, Paperclip, Strikethrough,
-  Maximize2, Minimize2, Settings
+  Maximize2, Minimize2, Settings, FileText, Download,
+  FileImage, FileVideo, FileAudio, File
 } from 'lucide-react';
+
+// Custom File Attachment Extension - Fixed ProseMirror Error
+const FileAttachment = Node.create({
+  name: 'fileAttachment',
+  
+  group: 'block',
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      src: {
+        default: null,
+      },
+      fileName: {
+        default: null,
+      },
+      fileSize: {
+        default: null,
+      },
+      fileType: {
+        default: null,
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-type="file-attachment"]',
+      },
+    ]
+  },
+  
+  renderHTML({ HTMLAttributes, node }) {
+    // FIXED: Remove the "0" content for atom nodes
+    return [
+      'div', 
+      { 
+        'data-type': 'file-attachment',
+        'data-file-name': node.attrs.fileName,
+        'data-file-size': node.attrs.fileSize,
+        'data-file-type': node.attrs.fileType,
+        'data-src': node.attrs.src,
+        class: 'file-attachment',
+        ...HTMLAttributes 
+      }
+      // No content array for atom nodes
+    ]
+  },
+  
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('div');
+      dom.className = 'file-attachment';
+      
+      const icon = document.createElement('span');
+      icon.className = 'file-attachment-icon';
+      icon.innerHTML = getFileIcon(node.attrs.fileType);
+      
+      const details = document.createElement('div');
+      details.className = 'file-attachment-details';
+      
+      const name = document.createElement('div');
+      name.className = 'file-attachment-name';
+      name.textContent = node.attrs.fileName || 'Unknown file';
+      
+      const size = document.createElement('div');
+      size.className = 'file-attachment-size';
+      size.textContent = formatFileSize(node.attrs.fileSize);
+      
+      const downloadIcon = document.createElement('span');
+      downloadIcon.innerHTML = '↓';
+      downloadIcon.style.marginLeft = 'auto';
+      downloadIcon.style.opacity = '0.7';
+      
+      details.appendChild(name);
+      details.appendChild(size);
+      
+      dom.appendChild(icon);
+      dom.appendChild(details);
+      dom.appendChild(downloadIcon);
+      
+      // Add click handler for download
+      dom.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (node.attrs.src) {
+          const link = document.createElement('a');
+          link.href = node.attrs.src;
+          link.download = node.attrs.fileName || 'download';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      });
+      
+      return {
+        dom,
+      }
+    }
+  },
+});
+
+// Helper functions for file handling
+const getFileIcon = (fileType) => {
+  if (!fileType) return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" /></svg>';
+  
+  if (fileType.startsWith('image/')) {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5,13.5L11,16.5L14.5,12L19,18H5M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19Z" /></svg>';
+  }
+  
+  if (fileType.startsWith('video/')) {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z" /></svg>';
+  }
+  
+  if (fileType.startsWith('audio/')) {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z" /></svg>';
+  }
+  
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" /></svg>';
+};
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '';
+  
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+};
 
 const BlockEditor = ({ value, onChange, isDarkMode }) => {
   const [isFullWidth, setIsFullWidth] = useState(false);
@@ -21,9 +152,10 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
   const [showWidthControl, setShowWidthControl] = useState(false);
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // Memoize editor configuration to prevent unnecessary recreations
+  // CRITICAL FIX: Force editor to update classes when isDarkMode changes
   const editorConfig = useMemo(() => ({
     extensions: [
       StarterKit.configure({
@@ -94,6 +226,9 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
         },
       }),
 
+      // File attachment extension - RESTORED
+      FileAttachment,
+
       // Task list extensions with proper configuration
       TaskList.configure({
         HTMLAttributes: {
@@ -128,9 +263,12 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     
     editorProps: {
       attributes: {
+        // CRITICAL: This class must update when isDarkMode changes
         class: `tiptap-editor-content focus:outline-none ${
           isDarkMode ? 'dark-mode' : 'light-mode'
         }`,
+        // Force style attribute for immediate effect
+        style: `color: ${isDarkMode ? '#ffffff' : '#111827'};`
       },
       
       // Handle image paste from clipboard
@@ -161,28 +299,55 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
         return false;
       },
       
-      // Handle image drop
+      // Handle file drop
       handleDrop: (view, event, slice, moved) => {
         const files = Array.from(event.dataTransfer?.files || []);
-        const imageFile = files.find(file => file.type.startsWith('image/'));
         
-        if (imageFile) {
+        if (files.length > 0) {
           event.preventDefault();
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const { state } = view;
-            const { tr } = state;
-            const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
-            if (pos) {
-              tr.insert(pos.pos, state.schema.nodes.image.create({ 
-                src: e.target.result,
-                alt: 'Dropped image',
-                style: 'width: 50%; height: auto;'
-              }));
-              view.dispatch(tr);
+          
+          files.forEach(file => {
+            if (file.type.startsWith('image/')) {
+              // Handle images
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const { state } = view;
+                const { tr } = state;
+                const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                if (pos) {
+                  tr.insert(pos.pos, state.schema.nodes.image.create({ 
+                    src: e.target.result,
+                    alt: file.name,
+                    style: 'width: 50%; height: auto;'
+                  }));
+                  view.dispatch(tr);
+                }
+              };
+              reader.readAsDataURL(file);
+            } else {
+              // Handle other files as attachments using custom extension
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                try {
+                  const { state } = view;
+                  const { tr } = state;
+                  const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                  if (pos) {
+                    tr.insert(pos.pos, state.schema.nodes.fileAttachment.create({
+                      src: e.target.result,
+                      fileName: file.name,
+                      fileSize: file.size,
+                      fileType: file.type
+                    }));
+                    view.dispatch(tr);
+                  }
+                } catch (error) {
+                  console.error('Error adding dropped file:', error);
+                }
+              };
+              reader.readAsDataURL(file);
             }
-          };
-          reader.readAsDataURL(imageFile);
+          });
           return true;
         }
         return false;
@@ -215,9 +380,50 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
-  }), [value, onChange, isDarkMode]);
+    
+    // CRITICAL: Force editor to recognize isDarkMode changes
+    key: `editor-${isDarkMode ? 'dark' : 'light'}`,
+    
+  }), [value, onChange, isDarkMode]); // CRITICAL: isDarkMode in dependencies
 
   const editor = useEditor(editorConfig);
+
+  // CRITICAL FIX: Force editor DOM to update classes when isDarkMode changes
+  useEffect(() => {
+    if (editor && editor.view && editor.view.dom) {
+      const editorElement = editor.view.dom;
+      
+      // Remove all theme classes
+      editorElement.classList.remove('dark-mode', 'light-mode');
+      
+      // Add correct class
+      const modeClass = isDarkMode ? 'dark-mode' : 'light-mode';
+      editorElement.classList.add(modeClass);
+      
+      // Force immediate style application
+      editorElement.style.color = isDarkMode ? '#ffffff' : '#111827';
+      
+      console.log('🔄 Updated editor class to:', modeClass);
+      console.log('📝 Editor classes now:', editorElement.className);
+    }
+  }, [editor, isDarkMode]);
+
+  // ADDITIONAL FIX: Watch for editor creation and apply classes immediately
+  useEffect(() => {
+    if (editor && editor.view && editor.view.dom) {
+      const editorElement = editor.view.dom;
+      
+      // Force immediate class application
+      const targetClass = isDarkMode ? 'dark-mode' : 'light-mode';
+      editorElement.className = `tiptap-editor-content focus:outline-none ${targetClass}`;
+      
+      // Force immediate style application
+      editorElement.style.color = isDarkMode ? '#ffffff' : '#111827';
+      
+      console.log('✅ Editor created with classes:', editorElement.className);
+      console.log('✅ Editor color:', editorElement.style.color);
+    }
+  }, [editor]);
 
   // Get current image width as percentage
   const getCurrentImageWidth = (imageElement) => {
@@ -267,8 +473,8 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     }
   }, [editor]);
 
-  // Handle file upload
-  const handleFileSelect = useCallback((event) => {
+  // Handle image file upload
+  const handleImageSelect = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file && editor) {
       if (file.type.startsWith('image/')) {
@@ -287,7 +493,51 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
     event.target.value = '';
   }, [editor]);
 
-  // Fixed attachment button handler
+  // Handle any file upload as attachment
+  const handleFileSelect = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (file && editor) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          if (file.type.startsWith('image/')) {
+            // Add as image if it's an image file
+            editor.chain().focus().setImage({ 
+              src: e.target.result,
+              alt: file.name,
+              style: 'width: 50%; height: auto;'
+            }).run();
+          } else {
+            // Add as file attachment using the custom extension
+            editor.chain().focus().insertContent({
+              type: 'fileAttachment',
+              attrs: {
+                src: e.target.result,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type
+              }
+            }).run();
+          }
+        } catch (error) {
+          console.error('Error adding file:', error);
+          // Fallback: Add as simple text link
+          const fileName = file.name || 'Attached file';
+          const fileLink = `<p><strong>📎 ${fileName}</strong> (${formatFileSize(file.size)})</p>`;
+          editor.chain().focus().insertContent(fileLink).run();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset input
+    event.target.value = '';
+  }, [editor]);
+
+  // Button handlers
+  const addImageFile = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
   const addAttachment = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -327,7 +577,7 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
   return (
     <div 
       ref={editorRef}
-      className={`tiptap-block-editor relative ${isDarkMode ? 'dark' : 'light'}`}
+      className={`tiptap-block-editor relative ${isDarkMode ? 'dark dark-mode' : 'light light-mode'}`}
     >
       {/* Floating Toolbar */}
       <div className={`sticky top-0 z-10 p-4 border-b backdrop-blur-sm transition-all duration-300 ${
@@ -447,8 +697,14 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
               <ImageIcon size={16} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={addAttachment}
+              onClick={addImageFile}
               title="Upload Image"
+            >
+              <FileImage size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={addAttachment}
+              title="Attach File"
             >
               <Paperclip size={16} />
             </ToolbarButton>
@@ -524,26 +780,37 @@ const BlockEditor = ({ value, onChange, isDarkMode }) => {
         </div>
       )}
 
-      {/* Hidden file input */}
+      {/* Hidden file inputs */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageSelect}
+        className="hidden"
+      />
+      
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="*/*"
         onChange={handleFileSelect}
         className="hidden"
       />
 
-      {/* Editor Content Container */}
-      <div className="editor-container">
+      {/* Editor Content Container with explicit theme classes */}
+      <div className={`editor-container ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
         <div 
-          className="editor-content-wrapper"
+          className={`editor-content-wrapper ${isDarkMode ? 'dark-mode' : 'light-mode'}`}
           style={{
             maxWidth: isFullWidth ? '100%' : `${contentWidth}%`,
             margin: '0 auto',
             transition: 'max-width 0.3s ease'
           }}
         >
-          <EditorContent editor={editor} />
+          <EditorContent 
+            editor={editor} 
+            className={isDarkMode ? 'dark-mode' : 'light-mode'}
+          />
         </div>
       </div>
     </div>
