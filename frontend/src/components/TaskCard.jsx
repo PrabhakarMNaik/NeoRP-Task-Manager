@@ -1,5 +1,3 @@
-// Version 9 - Performance optimized individual task card component
-
 import React, { memo } from 'react';
 import { User, Calendar, Timer, FileText } from 'lucide-react';
 import TimerManager from './TimerManager';
@@ -16,21 +14,6 @@ const TaskCard = memo(({ task, onDragStart, onOpenTask, isDarkMode, draggedTask 
 
   const formatTime = (seconds) => {
     return TimerManager.formatTime(seconds);
-  };
-
-  // Extract first line of description for preview
-  const getDescriptionPreview = (description) => {
-    if (!description) return 'No description';
-    
-    // Remove markdown headers and get first meaningful line
-    const lines = description.split('\n');
-    for (const line of lines) {
-      const cleanLine = line.replace(/^#+\s*/, '').trim();
-      if (cleanLine && cleanLine.length > 0) {
-        return cleanLine;
-      }
-    }
-    return 'No description';
   };
 
   const isBeingDragged = draggedTask && draggedTask.id === task.id;
@@ -79,11 +62,7 @@ const TaskCard = memo(({ task, onDragStart, onOpenTask, isDarkMode, draggedTask 
         }`}></div>
       </div>
       
-      <p className={`text-sm mb-4 line-clamp-2 leading-relaxed ${
-        isDarkMode ? 'text-gray-300' : 'text-gray-600'
-      }`}>
-        {getDescriptionPreview(task.description)}
-      </p>
+      {/* Removed description preview section */}
       
       <div className="flex justify-between items-center text-xs">
         <div className="flex items-center space-x-3">
